@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Keep main demoable. Bypass in an emergency: HK_SKIP=1 git push
+[ -n "$HK_SKIP" ] && exit 0
+if [ -f package.json ]; then npm run --if-present -s check || exit 1; fi
+exit 0
