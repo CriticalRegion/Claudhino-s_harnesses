@@ -6,8 +6,9 @@ Claude Code harnesses: drop-in project configs (rules, hooks, agents, slash comm
 
 | Folder | Built for | Focus | Status |
 |---|---|---|---|
-| [`hackathon-team-v2`](hackathon-team-v2/) | Hackathons, teams of 2-4 people each running their own agent | Same as v1, with coordination on its own git branch (never pushes your code), honest offline handling, row-wise board merges, non-destructive `install.sh`, pinned plugin/MCP versions | v2, current. 82 end-to-end tests (`tests/run.sh`) on Linux; hooks, MCP and subagents verified in a live headless Claude Code 2.1.325 session; macOS untested |
-| [`hackathon-team-v1`](hackathon-team-v1/) | Hackathons, teams of 2-3 | Original version | Superseded by v2: board commands push unfinished code to main, report success when offline, and the install overwrites README/.gitignore (see v2 GUIDE, "Changes from v1") |
+| [`hackathon-team-v3`](hackathon-team-v3/) | Hackathons, teams of 2-4 people each running their own agent | v2 plus event notifications: urgent events reach an agent mid-task or wake it when idle (one line, no agent chat), dependency-aware routing, loop guard with escalation to humans, collision guard, stale-claim takeover, contract-change alerts, `/demo-check`, optional Discord webhook. Linux, macOS and Windows (Git Bash) | v3, current. 148 end-to-end tests, run in CI on Linux, macOS and Windows; event delivery verified in a live interactive Claude Code session on Linux |
+| [`hackathon-team-v2`](hackathon-team-v2/) | Hackathons, teams of 2-4 people each running their own agent | Same as v1, with coordination on its own git branch (never pushes your code), honest offline handling, row-wise board merges, non-destructive `install.sh`, pinned plugin/MCP versions | **Deprecated**, use v3. Kept for reference |
+| [`hackathon-team-v1`](hackathon-team-v1/) | Hackathons, teams of 2-3 | Original version | **Deprecated**, use v3. Known bugs (see v2 guide, "Changes from v1"). Kept for reference |
 
 ## How to use one
 
@@ -22,4 +23,5 @@ Claude Code harnesses: drop-in project configs (rules, hooks, agents, slash comm
   - `README.md`: install in under 20 lines.
   - `GUIDE.md`: what every piece does, why, how to tune it, troubleshooting, and known limits.
 - State what was actually tested and how. Keep claims about token savings tied to a source.
+- Tests for a harness live in its `tests/run.sh`; add it to `.github/workflows/harness-tests.yml` so it runs on Linux, macOS and Windows.
 - Add a row to the table above in the same commit.

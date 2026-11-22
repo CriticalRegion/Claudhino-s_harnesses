@@ -1,5 +1,7 @@
 # Hackathon Team Harness (v1): full guide
 
+> **Deprecated.** Use [hackathon-team-v3](../hackathon-team-v3/) instead. v1 has known bugs: board commands push unfinished code to main, report success when offline, and the `cp -r` install overwrites your README and `.gitignore` (details in the [v2 guide](../hackathon-team-v2/GUIDE.md#9-changes-from-v1)). Kept only for reference; it gets no fixes.
+
 A Claude Code project configuration for hackathons. It does two things: it spends fewer tokens, and it steers the agent toward a working, demoable product before the deadline.
 
 ---

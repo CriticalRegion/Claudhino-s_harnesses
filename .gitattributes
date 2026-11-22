@@ -1,0 +1,3 @@
+# Everything here is text that must keep LF endings: shell scripts break with CRLF,
+# and Git for Windows converts to CRLF by default.
+* text=auto eol=lf

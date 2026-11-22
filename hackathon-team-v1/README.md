@@ -1,4 +1,7 @@
 # Hackathon Team Harness (v1)
+
+> **Deprecated.** Use [hackathon-team-v3](../hackathon-team-v3/) instead. v1 has known bugs: board commands push unfinished code to main, report success when offline, and the `cp -r` install overwrites your README and `.gitignore` (details in the [v2 guide](../hackathon-team-v2/GUIDE.md#9-changes-from-v1)). Kept only for reference; it gets no fixes.
+
 Copy this folder's contents into the root of your hackathon repo: `cp -r hackathon-team-v1/. your-repo/`. Details in [GUIDE.md](GUIDE.md).
 
 ## One-time install (Claude Code >= 2.1.290)

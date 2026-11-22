@@ -1,5 +1,7 @@
 # Hackathon Team Harness (v2): full guide
 
+> **Deprecated.** Use [hackathon-team-v3](../hackathon-team-v3/) instead: same coordination model plus event notifications (mid-task delivery, idle wake-ups, loop and collision guards) and macOS/Windows fixes. A v2 board upgrades in place: install v3 over it and run `hk.sh sync`. Kept only for reference; it gets no fixes.
+
 A Claude Code project configuration for hackathons. It spends fewer tokens, steers the agent toward a working, demoable product before the deadline, and lets 2-4 people (each with their own agent) split work without stepping on each other.
 
 ---

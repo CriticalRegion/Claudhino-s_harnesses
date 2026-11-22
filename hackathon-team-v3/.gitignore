@@ -1,0 +1,25 @@
+# hackathon harness: per-clone state (never commit)
+.hackathon/state/
+.hackathon/.me
+.hackathon/.seen
+.hackathon/.fetched
+.hackathon/.lock/
+.hackathon/.cur.lock/
+.hackathon/.ucur
+.hackathon/.beat
+.hackathon/.wakes
+.hackathon/.warned
+.hackathon/.watch.pid
+.hackathon/.discord
+CLAUDE.local.md
+.claude/settings.local.json
+.playwright-mcp/
+# secrets and build output
+.env
+.env.local
+.env.*.local
+.env.production
+node_modules/
+.next/
+dist/
+.vercel/

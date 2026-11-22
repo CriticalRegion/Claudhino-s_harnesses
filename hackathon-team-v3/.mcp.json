@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "context7": { "command": "npx", "args": ["-y", "@upstash/context7-mcp@4.7.3"] },
+    "playwright": { "command": "npx", "args": ["-y", "@playwright/mcp@0.0.86", "--headless"] },
+    "github": { "type": "http", "url": "https://api.githubcopilot.com/mcp/" },
+    "vercel": { "type": "http", "url": "https://mcp.vercel.com" }
+  }
+}

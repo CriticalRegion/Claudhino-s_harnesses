@@ -1,0 +1,47 @@
+name: harness tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Windows - use Git for Windows' default line endings (CRLF checkout)
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf true
+
+      - uses: actions/checkout@v4
+
+      - name: macOS - test with the stock /bin/bash 3.2 and BSD awk most Macs have
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$RUNNER_TEMP/stock"
+          ln -sf /bin/bash "$RUNNER_TEMP/stock/bash"
+          ln -sf /usr/bin/awk "$RUNNER_TEMP/stock/awk"
+          echo "$RUNNER_TEMP/stock" >> "$GITHUB_PATH"
+
+      - name: Tool versions
+        run: |
+          bash --version | head -n1
+          git --version
+          awk --version 2>/dev/null | head -n1 || awk -W version 2>/dev/null | head -n1 || echo "awk: BSD (no --version)"
+          node --version
+          (python3 -c 'import sys; print("python", sys.version.split()[0])' || python -c 'import sys; print("python", sys.version.split()[0])') 2>/dev/null
+          timeout --version 2>/dev/null | head -n1 || echo "no coreutils timeout"
+          command -v nohup cygpath curl || true
+
+      - name: hackathon-team-v3 end-to-end tests
+        run: bash hackathon-team-v3/tests/run.sh

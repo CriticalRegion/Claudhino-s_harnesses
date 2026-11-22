@@ -1,4 +1,7 @@
 # Hackathon Team Harness (v2)
+
+> **Deprecated.** Use [hackathon-team-v3](../hackathon-team-v3/) instead: same coordination model plus event notifications (mid-task delivery, idle wake-ups, loop and collision guards) and macOS/Windows fixes. A v2 board upgrades in place: install v3 over it and run `hk.sh sync`. Kept only for reference; it gets no fixes.
+
 Claude Code config for hackathons: demo-first rules, a deadline clock, cheap research agents, and git-based coordination for 2-4 people each running their own agent. Details in [GUIDE.md](GUIDE.md). What changed from v1: [GUIDE.md#changes-from-v1](GUIDE.md#9-changes-from-v1).
 
 ## Install (Claude Code >= 2.1.324, node, git, bash)
