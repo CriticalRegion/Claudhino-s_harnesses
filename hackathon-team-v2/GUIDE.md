@@ -14,7 +14,7 @@ hackathon-team-v2/
 ├── CLAUDE.md                  # Always-loaded rules: demo-first, fake-it policy, terse output, team protocol
 ├── .mcp.json                  # MCP servers: context7, playwright (pinned), github, vercel
 ├── .gitignore                 # Lines merged into yours: per-clone harness state, .env files, build output
-├── .githooks/pre-push         # Pushes to main/master must pass `npm run check` (if defined)
+├── .githooks/pre-push         # Pushes to main/master must pass `npm run check` (if defined) and a Python syntax check
 ├── .hackathon/
 │   ├── PLAN.md                # Pitch, owners, demo path, URLs, milestones, cut list (filled by /kickoff)
 │   ├── deadline               # Local time YYYY-MM-DDTHH:MM; drives the clock hook
@@ -36,7 +36,7 @@ Created per clone by `hk.sh init` (gitignored, never committed): `.hackathon/sta
 ### Prerequisites
 - Claude Code **2.1.324 or later** (pinning the plugin marketplace to a ref needs it).
 - **Node.js on your PATH** (ponytail's hooks, the `npx` MCP servers, and the installer's JSON merge).
-- git and bash. Scripts avoid bash 4 features and GNU-only flags for macOS, but were only tested on Linux. A shared git remote (GitHub) for teams.
+- git and bash. Scripts avoid bash 4 features and GNU-only flags for macOS, tested on Linux and macOS (`tests/run.sh`). A shared git remote (GitHub) for teams.
 
 ### Steps
 1. **Install into your repo** (it must already be a git repo):
@@ -58,7 +58,7 @@ Created per clone by `hk.sh init` (gitignored, never committed): `.hackathon/sta
 
 | When | Command | What happens |
 |---|---|---|
-| Hour 0 | `/kickoff <brief, theme, deadline, team size>` | Picks one idea, fills `PLAN.md`, writes the deadline, scaffolds, adds a fast `check` script, deploys hello-world. Team: creates `contracts/` stubs, assigns directory owners, adds board tasks |
+| Hour 0 | `/kickoff <brief, theme, deadline, team size>` | Generates 5 ideas, drops ones that already exist, scores originality / real problem / sponsor tech / effort, picks one, fills `PLAN.md`, writes the deadline, scaffolds, adds a fast `check` script, deploys hello-world. Team: creates `contracts/` stubs, assigns directory owners, adds board tasks |
 | Hours 1 to ~-4h | `/slice` (repeat) | Builds the earliest unfinished demo-path step (or your claimed task) end to end, starts the dev server if needed, verifies in a browser, commits |
 | Whenever behind | `/cut` | Compares time left to milestones, cuts or fakes, updates the cut list, releases cut tasks |
 | Last hour | `/ship` | Clean deploy, README with honest FAKE list, 2-minute demo script, submission text, runs `judge` |
@@ -105,7 +105,7 @@ Versions are pinned so `npx` can't pull a changed package during the event. Ever
 - Default model `sonnet`. Switch to `opus` for one hard problem, then back.
 
 ### Pre-push hook
-Pushes to `main`/`master` run `npm run check` if `package.json` defines it (`/kickoff` adds a fast one: typecheck/lint, not a full build). Other branches push freely. Emergency bypass: `HK_SKIP=1 git push`. `hk.sh` never triggers it, because it never pushes your code.
+Pushes to `main`/`master` run `npm run check` if `package.json` defines it (`/kickoff` adds a fast one: typecheck/lint, not a full build), then, if the repo has tracked `.py` files, a syntax check of each (compiled in memory; no `__pycache__` written). Other branches push freely. Emergency bypass: `HK_SKIP=1 git push`. `hk.sh` never triggers it, because it never pushes your code.
 
 ---
 
@@ -177,7 +177,7 @@ Agents don't chat. Git is the message bus, and `hk.sh` is the only writer.
 | `NOT PUSHED` | Saved locally; `hk.sh sync` retries |
 | `STATE CONFLICT` | Your unpushed board edit and a teammate's touched the same row. `cd .hackathon/state && git rebase origin/hackathon-state`, fix `BOARD.md`, `git rebase --continue`, `hk.sh sync` |
 | `hk: busy` | Another hk.sh is running; if none is, delete `.hackathon/.lock` |
-| Push to main blocked by pre-push | `npm run check` failed; fix it, or `HK_SKIP=1 git push` in an emergency |
+| Push to main blocked by pre-push | `npm run check` or the Python syntax check failed (the file and line are printed); fix it, or `HK_SKIP=1 git push` in an emergency |
 | Clock line missing | Deadline file still has the placeholder, or a session-start line says it can't be read |
 | Context filling up | `/compact` at a milestone; `/clear` between unrelated tasks |
 
@@ -185,10 +185,10 @@ Agents don't chat. Git is the message bus, and `hk.sh` is the only writer.
 
 ## 8. What was tested
 
-- `tests/run.sh`: 82 checks against throwaway repos and a local bare remote: non-destructive install and idempotent re-install; init/attach; claim/release/done/add/log; TAKEN vs LOST RACE under truly simultaneous claims (5 rounds, one winner each); concurrent log appends (all kept); adjacent-row edits made offline by two people merging cleanly; WIP commits never reaching the remote; board working while the pre-push check fails; offline claim refused and offline done/log queued then pushed by sync; feature branches without upstream; relative remote URLs; running from subdirectories; `peek` returning instantly with an unreachable remote; clock phases, CRLF, bad values; pre-push on main vs feature branches and the bypass.
+- `tests/run.sh`: 86 checks against throwaway repos and a local bare remote: non-destructive install and idempotent re-install; init/attach; claim/release/done/add/log; TAKEN vs LOST RACE under truly simultaneous claims (5 rounds, one winner each); concurrent log appends (all kept); adjacent-row edits made offline by two people merging cleanly; WIP commits never reaching the remote; board working while the pre-push check fails; offline claim refused and offline done/log queued then pushed by sync; feature branches without upstream; relative remote URLs; running from subdirectories; `peek` returning instantly with an unreachable remote; clock phases, CRLF, bad values; pre-push on main vs feature branches and the bypass; the Python syntax check (blocks a broken file, passes a valid one, ignores feature branches, writes no `__pycache__`). Passes on Linux and on macOS.
 - A live headless Claude Code 2.1.325 session on a sandbox project: both SessionStart hooks injected the clock line and the board, the pinned MCP servers started and exposed their tools, and the `scout` subagent received exactly `Read, Grep, Glob` plus the context7 tools.
 - shellcheck clean (warning level).
-- Not tested: macOS (scripts avoid GNU-only flags and fall back to BSD `date` and `perl` for timeouts), Windows, the github/vercel MCP sign-in, and a full `/kickoff` -> `/ship` run on a real project.
+- Not tested: Windows, the github/vercel MCP sign-in, and a full `/kickoff` -> `/ship` run on a real project.
 
 ---
 

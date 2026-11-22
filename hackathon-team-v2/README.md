@@ -24,4 +24,4 @@ Team: `/sync`, `/claim <id>`, `/handoff <id> <path:line>`. A clock hook injects 
 | `hk.sh` + state branch | Board / log / decisions on their own branch | Zero tokens when nothing changed |
 
 ## Test it
-`bash hackathon-team-v2/tests/run.sh` - 82 end-to-end checks (installer, coordination incl. races and offline, clock, pre-push) against throwaway repos. Linux-tested; macOS paths are written for BSD tools but untested.
+`bash hackathon-team-v2/tests/run.sh` - 86 end-to-end checks (installer, coordination incl. races and offline, clock, pre-push incl. Python) against throwaway repos. Passes on Linux and macOS.

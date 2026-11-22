@@ -151,6 +151,16 @@ has "init with relative remote" "$(hk dave init dave)" "you are @dave"
 has "log with relative remote" "$(hk dave log 'relative ok')" "saved to LOG.md"
 has "relative-remote log on remote" "$(remote_log)" "relative ok"
 
+echo "# pre-push: Python syntax check"
+git init -q "$T/py"; cd "$T/py" || exit 1; git config core.hooksPath "$T/seed/.githooks"
+printf 'x = 1\n' > app.py; git add -A; git commit -qm ok
+git init -q --bare "$T/py.git"; git remote add origin "$T/py.git"
+git push -q origin main 2>/dev/null && ok "valid python reaches main" || no "valid python reaches main"
+printf 'def f(:\n' > app.py; git commit -qam broken
+o=$(git push -q origin main 2>&1) && no "python syntax error blocks main" || has "python syntax error blocks main" "$o" "app.py:1"
+git push -q origin HEAD:refs/heads/feat 2>/dev/null && ok "broken python ok on feature branch" || no "broken python ok on feature branch"
+[ ! -d __pycache__ ] && ok "no __pycache__ written" || no "no __pycache__ written"
+
 echo "# clock.sh"
 C="$T/seed/.claude/hooks/clock.sh"; D="$T/seed/.hackathon/deadline"
 eq "placeholder silent" "$(bash "$C")" ""

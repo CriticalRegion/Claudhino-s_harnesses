@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Keep main demoable: a push to main/master must pass `npm run check` (if package.json defines it).
+# Keep main demoable: a push to main/master must pass `npm run check` (if package.json defines it)
+# and, if the repo has Python files, a syntax check of every tracked .py file (nothing written to disk).
 # Other branches push freely. Bypass in an emergency: HK_SKIP=1 git push
 [ -n "${HK_SKIP:-}" ] && exit 0
 protect=0
@@ -10,7 +11,19 @@ while read -r _lref lsha rref _rsha; do
 done
 [ $protect = 1 ] || exit 0
 cd "$(git rev-parse --show-toplevel)" || exit 0
-[ -f package.json ] || exit 0
-grep -q '"check"[[:space:]]*:' package.json || exit 0
-echo "pre-push: npm run check (main must stay demoable; HK_SKIP=1 git push to bypass)" >&2
-npm run -s check || { echo "pre-push: check failed, push to main blocked." >&2; exit 1; }
+if [ -f package.json ] && grep -q '"check"[[:space:]]*:' package.json; then
+  echo "pre-push: npm run check (main must stay demoable; HK_SKIP=1 git push to bypass)" >&2
+  npm run -s check || { echo "pre-push: check failed, push to main blocked." >&2; exit 1; }
+fi
+if command -v python3 >/dev/null 2>&1 && [ -n "$(git ls-files '*.py' | head -n1)" ]; then
+  echo "pre-push: python syntax check" >&2
+  git ls-files -z '*.py' | xargs -0 python3 -c '
+import sys
+bad = 0
+for f in sys.argv[1:]:
+    try: compile(open(f, "rb").read(), f, "exec")
+    except SyntaxError as e: bad = 1; print("  %s:%s: %s" % (f, e.lineno, e.msg), file=sys.stderr)
+    except OSError: pass
+sys.exit(bad)' || { echo "pre-push: Python syntax error, push to main blocked." >&2; exit 1; }
+fi
+exit 0
