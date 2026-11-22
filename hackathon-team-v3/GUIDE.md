@@ -166,6 +166,40 @@ A line is delivered once, whichever path gets it first. Nothing is printed when 
 ### Permission modes matter for answers
 In the default (manual) permission mode, the project allow rule `Bash(bash .hackathon/bin/hk.sh *)` lets a woken agent post its `ANSWER` line without a prompt (verified live). In **auto mode**, Claude Code's safety classifier treated the same call as an unsanctioned reply to another agent and blocked it; the agent then told its human the answer and the exact line to post, as CLAUDE.md instructs. That keeps a human in the loop for agent-to-agent replies, which is the point; we don't try to get around it.
 
+### Autonomous mode (`hk.sh auto`)
+For stretches where nobody wants to babysit: agents decide for themselves and keep working.
+
+| Command | Effect |
+|---|---|
+| `hk.sh auto on [90m\|2h]` | Team-wide (default 3 h budget). Logged as `AUTO ON`, which wakes every idle agent |
+| `hk.sh auto off` | Team-wide kill switch, reaches every agent within ~15 s |
+| `hk.sh auto on --me` / `off --me` / `clear --me` | Override for your clone only / back to the team setting |
+| `hk.sh auto status` | Team setting, your override, and what your agent is doing |
+
+While it's on for your agent:
+- **No permission pauses:** a `PermissionRequest` hook approves every prompt. Deny rules are checked before any prompt, so the deny list (force-push, `rm -rf /`, `.env` reads, large build dirs) still blocks in every mode.
+- **No questions:** `AskUserQuestion` is refused with "pick the option you judge best and log it with `hk.sh decide`".
+- **No stopping while work remains:** when the agent ends a turn, the `Stop` hook names the next concrete step: finish your task → claim the next unblocked one → fix `DEMO RED` → `/demo-check` (only if PLAN.md has a URL). When nothing is left, it lets the agent stop.
+- **Escalations become decisions:** an `ESCALATE` addressed to an autonomous asker is urgent for it, and it decides.
+- **It always ends:** autonomous off (team or `--me`), the time budget, the deadline, or 3 consecutive turn-ends with no change to the board, log, commits or working tree. The last one logs `STUCK (autonomous): ...` for the humans instead of spinning.
+- It's designed for the default (manual) or accept-edits permission modes. In Claude Code's auto mode, the safety classifier still reviews actions and may block some (we saw it block agent-to-agent replies).
+
+**Risk:** an autonomous agent acts on teammates' board messages and approves its own commands with nobody watching. A wrong or malicious board line gets acted on. Keep the deny list, keep budgets short, and use a container or dev container for long unattended runs. It is off unless someone runs `hk.sh auto on`.
+
+### Solo mode (`hk.sh solo`)
+For the end of the event, when one agent should do the remaining small fixes alone.
+
+| Command | Effect |
+|---|---|
+| `hk.sh solo @alice [2h]` | Alice's agent becomes autonomous (default 3 h) and owns the repo; everyone else is muted. Logged as `SOLO @alice` |
+| `hk.sh solo off` | Back to normal; wakes everyone with `SOLO OFF` |
+
+- **The solo agent** may edit any file (no collision warnings, no folder ownership), change contracts, and take any task, even someone else's (`TOOK-OVER ... (solo)`). Only human notes (`hk.sh note "@alice ..."`) and mode changes wake it; teammates' events become FYI.
+- **Everyone else** gets one `SOLO` notice, then their team notifications are muted (nothing mid-task, nothing at the next prompt) until `solo off`. They aren't blocked: if their human asks them to do something, they can, so coordinate with the solo agent's human.
+- Solo overrides the team auto setting: only the solo agent is autonomous. Its human can still opt out with `hk.sh auto off --me`.
+
+**Verified live** (interactive Claude Code, manual permission mode): `AUTO ON` from a teammate woke an idle agent, which claimed and finished two dependent tasks with its file-write prompts auto-approved ("Allowed by PermissionRequest hook"); told to stop after one task, the `Stop` hook sent it on to the next; with no demo URL it logged `STUCK` and stopped; `SOLO @alice` made it finish two tasks in a teammate's folder without collision warnings; `AUTO OFF` / `SOLO OFF` woke it and it stopped without taking a new task.
+
 **Rules baked into CLAUDE.md:** events aren't conversation; DONE/CONTRACT-CHANGED → pull and adapt; ASK → one ANSWER; NOTE → follow; COLLISION → ask first; DEMO RED → fix only your step; ESCALATED → tell the human; woken with nothing relevant → one line and stop; blocked hk.sh call → tell the human the line.
 
 **Known limits**
@@ -187,6 +221,8 @@ In the default (manual) permission mode, the project allow rule `Bash(bash .hack
 | Use a remote other than `origin` | `git config hk.remote <name>` |
 | Tune notifications | `HK_WAKE_CAP` (wakes/hour, default 6), `HK_STALE_MIN` (default 45), `HK_COLLISION=warn`, `HK_FETCH_EVERY` (seconds between background fetches, default 20), `HK_WATCH_INTERVAL` (watcher poll, default 15 / 5 late), set in the environment you start `claude` from |
 | Turn wake-ups off | Remove the `watch` entries from the `Stop` and `SessionStart` hooks in `.claude/settings.json` |
+| Tune autonomous mode | `HK_AUTO_STUCK` (no-progress turn-ends before stopping, default 3); `HK_STOP_STYLE=block` for the classic Stop-hook form; budgets via `hk.sh auto on 90m` / `solo @x 2h` |
+| Remove autonomous/solo entirely | Delete the `PermissionRequest` hook and the `autostop` entry under `Stop` in `.claude/settings.json` |
 | Stronger UI polish / charts / deck | `frontend-design`, `dataviz`, `pptx` skills |
 | Different tone or rules | Edit `CLAUDE.md`. Keep it short; every line is paid for on every turn |
 | Upgrade ponytail or MCP servers | Bump the `ref` in settings.json / versions in `.mcp.json`, test once before the event |
@@ -216,12 +252,15 @@ In the default (manual) permission mode, the project allow rule `Bash(bash .hack
 | Woken agent's `ANSWER` blocked | Auto mode's classifier asks for a human on agent-to-agent replies; approve it, post the line yourself, or use the default permission mode |
 | `COLLISION WARNING` on a file you meant to edit | Tell the agent it's fine; the retry goes through |
 | Discord shows nothing | `hk.sh discord test`; only the events of people who set the webhook are posted |
+| Autonomous agent keeps getting prompts | It's in Claude Code's auto mode (classifier) or `hk.sh auto status` says off; use manual/accept-edits mode and check the status line |
+| Autonomous agent stopped early | Work ran out (nothing claimable, demo GREEN or no URL), the budget ended, or it logged `STUCK`; `hk.sh auto status` says which |
+| Muted and want news anyway | Someone is solo; `hk.sh board` and `hk.sh sync` still work, or ask for `hk.sh solo off` |
 
 ---
 
 ## 8. What was tested
 
-- `tests/run.sh`: 144 checks against throwaway repos and a local bare remote. Everything from v2 (install/merge, claims and races, offline handling, row merges, WIP isolation, pre-push, Python check, clock) plus, for v3: dependency routing (DONE is urgent only for the dependent task's owner); `posttool` JSON validity, speed and subagent skip; ASK/NOTE/ANSWER mentions; the loop guard logging ESCALATE and never waking; the watcher waking (exit 2) on an urgent event, staying quiet otherwise, replacing an older watcher, and respecting the wake cap with the event still delivered at the next prompt; the collision guard (CLAIM-FILE, owned directory, own directory, refuse-once then retry, `HK_COLLISION=warn`); contract alerts on push to main; post-commit activity beats, STALE display and `--take`; Discord posts to a local fake webhook (valid JSON, mentions disabled, only your own events, non-Discord URLs refused); upgrading a v2 board in place; `clock.sh --minutes`.
+- `tests/run.sh`: 195 checks against throwaway repos and a local bare remote. Everything from v2 (install/merge, claims and races, offline handling, row merges, WIP isolation, pre-push, Python check, clock) plus, for v3: dependency routing (DONE is urgent only for the dependent task's owner); `posttool` JSON validity, speed and subagent skip; ASK/NOTE/ANSWER mentions; the loop guard logging ESCALATE and never waking; the watcher waking (exit 2) on an urgent event, staying quiet otherwise, replacing an older watcher, and respecting the wake cap with the event still delivered at the next prompt; the collision guard (CLAIM-FILE, owned directory, own directory, refuse-once then retry, `HK_COLLISION=warn`); contract alerts on push to main; post-commit activity beats, STALE display and `--take`; Discord posts to a local fake webhook (valid JSON, mentions disabled, only your own events, non-Discord URLs refused); upgrading a v2 board in place; `clock.sh --minutes`; autonomous mode (permit JSON, AskUserQuestion refusal, Stop-hook next steps through a whole board, work-ran-out stop, DEMO RED, no-URL stop, STUCK after 3, per-person override, time budget, AUTO ON/OFF reaching everyone, ESCALATE to an autonomous asker); solo mode (solo agent autonomous and unrestricted, others muted but still able to work, human notes still delivered, takeover of any task, SOLO OFF); claims no longer hiding teammates' news.
 - A live interactive Claude Code 2.1.325 session (Haiku) in tmux on a sandbox with two teammates: a teammate's NOTE arrived mid-task via `PostToolUse`; an idle agent was woken by a dependency's DONE and replied in one line; the collision guard refused an edit in a teammate's directory before writing; a woken agent answered an ASK with one `ANSWER` line in manual mode, was blocked by the classifier in auto mode (and told its human instead); a follow-up ASK became `ESCALATE` without waking anyone. Two bugs found this way were fixed (agents didn't know their own handle; `PreToolUse` warnings arrived after the edit).
 - shellcheck clean (warning level). Linux only for v3; the v2 parts also passed on macOS.
 - Not tested: macOS and Windows for the v3 hooks, a real Discord server (a local fake webhook was used), the github/vercel MCP sign-in, and a full `/kickoff` -> `/ship` run on a real project.
@@ -230,6 +269,7 @@ In the default (manual) permission mode, the project allow rule `Bash(bash .hack
 
 ## 9. Changes from v2
 
+- Autonomous mode (`hk.sh auto`) and solo mode (`hk.sh solo`): self-approved prompts, no questions, Stop-hook continuation until work runs out, budgets, STUCK detection, kill switch, muting.
 - Event routing: urgent vs FYI per person, using a new board `deps` column (`add --after`).
 - Mid-task delivery (`PostToolUse`), idle wake-ups (`asyncRewake` watcher on `Stop`/`SessionStart`), and urgent-first next-prompt delivery; each event delivered once.
 - Loop guard (one ASK/ANSWER round trip, then ESCALATE for humans) and a wake cap.

@@ -37,3 +37,9 @@ Terse. Lead with what changed and what to do next. No recap of steps.
 - If hk.sh says OFFLINE or NOT PUSHED, tell the human; never assume a claim succeeded.
 - If an hk.sh call is blocked by a permission check, tell the human the exact line to post; don't look for another route.
 - Never loop with another agent. Never force-push.
+
+## Autonomous and solo mode (only when a line says AUTONOMOUS MODE ON or SOLO MODE)
+- AUTONOMOUS: never wait for or ask the human. Wherever the rules above say "tell/ask the human", decide yourself, log it with `hk.sh decide "<choice and why>"`, and continue. An ESCALATE addressed to you means you decide. OFFLINE / NOT PUSHED: keep working, `hk.sh sync` later. A command blocked by the deny list: choose another approach; never work around it.
+- Keep going until the Stop hook lets you stop: finish your task, `/handoff`, claim the next unblocked one, `/demo-check` after deploys, fix DEMO RED in your area. Small, working commits.
+- SOLO, you: you may edit any file, change contracts and take any task (`hk.sh claim <id>`); push working states to main often.
+- SOLO, someone else: team notifications are muted; work only if your human asks, and stay out of the solo agent's way.

@@ -27,6 +27,8 @@ Team: `/sync`, `/claim <id>`, `/handoff <id> <path:line>`. Events arrive by them
 | event routing + hooks | Urgent-for-you events mid-task (`PostToolUse`) or by waking you (`asyncRewake`); FYI at the next prompt | ~20-40 tokens per relevant event, capped at 6 wakes/hour |
 | guards | One ASK/ANSWER round trip then ESCALATE to humans; collision warning before editing a teammate's file; stale-claim takeover; contract-change alerts | Prevents agent loops and wasted work |
 | Discord webhook (optional) | Humans follow every event in a channel | No agent tokens |
+| autonomous mode | `hk.sh auto on [2h]`: agents approve their own prompts (deny list still applies), never ask, keep going until work runs out; team-wide kill switch `hk.sh auto off` | Stops itself when idle or stuck |
+| solo mode | `hk.sh solo @name`: one agent finishes alone with free rein; everyone else is muted | No team chatter in the endgame |
 | `/demo-check` | Walks the demo path in a browser after deploys, logs DEMO GREEN/RED | One focused pass |
 | `install.sh` | Non-destructive install: merges `.gitignore`, `.gitattributes`, `CLAUDE.md`, `.mcp.json`, `settings.json`; strips CRLF from scripts | - |
 
@@ -42,6 +44,8 @@ Team: `/sync`, `/claim <id>`, `/handoff <id> <path:line>`. Events arrive by them
 | `hk.sh note "@name ..."` | A human's note to someone's agent |
 | `hk.sh demo green\|red "..."` | Demo-path health (used by `/demo-check`) |
 | `hk.sh discord <url>\|off\|test` | Post your events to Discord |
+| `hk.sh auto on [2h] [--me]` / `off` / `status` | Autonomous mode for the team (or just you) |
+| `hk.sh solo @name [2h]` / `solo off` | One agent finishes alone; others muted |
 
 ## Test it
-`bash hackathon-team-v3/tests/run.sh` - 148 end-to-end checks against throwaway repos: everything from v2 plus routing, delivery, wake-ups, guards, Discord via a local fake webhook, v2-board upgrade, CRLF and Windows-path handling. GitHub Actions runs them on Linux, macOS (stock bash 3.2 + BSD awk) and Windows (Git Bash, CRLF checkout) on every push and PR. Wake-ups, mid-task delivery, the collision guard and the loop guard were also verified in a live interactive Claude Code session on Linux.
+`bash hackathon-team-v3/tests/run.sh` - 195 end-to-end checks against throwaway repos: everything from v2 plus routing, delivery, wake-ups, guards, Discord via a local fake webhook, v2-board upgrade, CRLF and Windows-path handling, autonomous and solo mode. GitHub Actions runs them on Linux, macOS (stock bash 3.2 + BSD awk) and Windows (Git Bash, CRLF checkout) on every push and PR. Wake-ups, mid-task delivery, the collision guard, the loop guard, autonomous mode, solo mode and the kill switch were also verified in live interactive Claude Code sessions on Linux.
