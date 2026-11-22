@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Marks you active on the team board (stale-claim detection). Runs in the background; never slows a commit.
 h="$(git rev-parse --show-toplevel)/.hackathon/bin/hk.sh"
-[ -f "$h" ] && nohup bash "$h" _beat >/dev/null 2>&1 </dev/null &
+[ -f "$h" ] || exit 0
+if command -v nohup >/dev/null 2>&1; then nohup bash "$h" _beat >/dev/null 2>&1 </dev/null &
+else bash "$h" _beat >/dev/null 2>&1 </dev/null & fi
 exit 0

@@ -4,7 +4,12 @@
 set -u
 HARN=$(cd "$(dirname "$0")/.." && pwd)
 T=$(mktemp -d "${TMPDIR:-/tmp}/hk-test.XXXXXX"); SRV=
-trap '[ -n "$SRV" ] && kill "$SRV" 2>/dev/null; pkill -f "$T/.*hk.sh watch" 2>/dev/null; rm -rf "$T"' EXIT
+cleanup(){ [ -n "$SRV" ] && kill "$SRV" 2>/dev/null; for f in "$T"/*/.hackathon/.watch.pid; do [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null; done
+  sleep 0.5; rm -rf "$T" 2>/dev/null || { sleep 2; rm -rf "$T"; }; }
+trap cleanup EXIT
+case $(uname -s) in MINGW*|MSYS*|CYGWIN*) WIN=1;; *) WIN=;; esac   # Git Bash on Windows: slower process start
+PY=; for c in python3 python; do "$c" -c 'import sys' >/dev/null 2>&1 && { PY=$c; break; }; done
+echo "# platform: $(uname -s), bash $BASH_VERSION, $(awk --version 2>/dev/null | head -n1 | cut -c1-40)${WIN:+ (Windows)}" 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 export GIT_CONFIG_GLOBAL=$T/gitconfig GIT_CONFIG_NOSYSTEM=1
 git config --global init.defaultBranch main; git config --global user.name t; git config --global user.email t@t
@@ -46,6 +51,12 @@ git add -A; git commit -qm init
 git init -q --bare "$T/remote.git"; git remote add origin "$T/remote.git"; git push -q -u origin main
 git clone -q "$T/remote.git" "$T/alice"; git clone -q "$T/remote.git" "$T/bob"; git clone -q "$T/remote.git" "$T/carol"
 
+mkdir -p "$T/crlf"; cp -R "$HARN/." "$T/crlf/"; for f in .hackathon/bin/hk.sh .githooks/pre-push .claude/hooks/clock.sh .gitignore; do awk '{ printf "%s\r\n", $0 }' "$HARN/$f" > "$T/crlf/$f"; done
+git init -q "$T/crlfdst"; tr -d '\r' < "$HARN/install.sh" > "$T/crlf/install.sh"; bash "$T/crlf/install.sh" "$T/crlfdst" >/dev/null 2>&1
+grep -q "$(printf '\r')" "$T/crlfdst/.hackathon/bin/hk.sh" "$T/crlfdst/.githooks/pre-push" "$T/crlfdst/.gitignore" && no "installer strips CRLF" || ok "installer strips CRLF from scripts"
+bash -n "$T/crlfdst/.hackathon/bin/hk.sh" && ok "installed hk.sh parses" || no "installed hk.sh parses"
+has "project .gitattributes keeps scripts LF" "$(cat "$T/seed/.gitattributes")" ".hackathon/bin/hk.sh text eol=lf"
+
 echo "# uninitialised clone: hooks are silent"
 eq "peek silent" "$(hk carol peek)" ""
 eq "sync --hook silent" "$(hk carol sync --hook)" ""
@@ -57,6 +68,7 @@ git -C "$T/remote.git" rev-parse -q --verify refs/heads/hackathon-state >/dev/nu
 has "bob init attaches" "$(hk bob init bob)" "you are @bob"
 eq "state dir ignored in main repo" "$(git -C "$T/bob" status --porcelain)" ""
 eq "hooksPath set" "$(git -C "$T/bob" config core.hooksPath)" ".githooks"
+has "state branch files are LF on every OS" "$(cat "$T/alice/.hackathon/state/.gitattributes")" "* text eol=lf"
 eq "bad name refused" "$(hkrc bob init 'x y')" 1
 
 echo "# board ops"
@@ -143,7 +155,7 @@ has "from state dir" "$(cd "$T/bob/.hackathon/state" && bash ../bin/hk.sh board)
 echo "# peek never blocks"
 git -C "$T/bob" remote set-url origin "http://10.255.255.1/x.git"; rm -f "$T/bob/.hackathon/.fetched"
 s=$(date +%s); hk bob peek >/dev/null; e=$(( $(date +%s) - s ))
-[ $e -le 1 ] && ok "peek returns in ${e}s with unreachable remote" || no "peek fast" "${e}s"
+lim=1; [ -n "$WIN" ] && lim=3; [ $e -le $lim ] && ok "peek returns in ${e}s with unreachable remote" || no "peek fast" "${e}s"
 git -C "$T/bob" remote set-url origin "$T/remote.git"
 
 echo "# relative remote URL (remote path resolved from repo root, not the state dir)"
@@ -170,7 +182,7 @@ mkdir -p contracts; echo "export type Item = { id: string }" > contracts/api.ts
 git add -A; git commit -qm init; git init -q --bare "$T/r3.git"; git remote add origin "$T/r3.git"; git push -q -u origin main
 for p in va:alice vb:bob vc:carol; do git clone -q "$T/r3.git" "$T/${p%%:*}"; hk "${p%%:*}" init "${p##*:}" >/dev/null; done
 r3_log(){ git -C "$T/r3.git" show hackathon-state:LOG.md; }
-pt(){ (cd "$T/$1" && printf '%s' "${2:-{\"tool_name\":\"Bash\"\}}" | bash .hackathon/bin/hk.sh posttool 2>&1); }
+pt(){ local in=${2:-}; [ -n "$in" ] || in='{"tool_name":"Bash"}'; (cd "$T/$1" && printf '%s' "$in" | bash .hackathon/bin/hk.sh posttool 2>&1); }
 fetchnow(){ hk "$1" _bgfetch >/dev/null; }
 waitfor(){ local i=0; until eval "$1" >/dev/null 2>&1; do i=$((i+1)); [ $i -ge "${2:-40}" ] && return 1; sleep 0.25; done; }
 hk va add t1-api contracts/api.ts >/dev/null; hk va add t3-web web/ --after t1-api >/dev/null; hk va add t9-misc misc/ >/dev/null
@@ -180,7 +192,7 @@ hk va claim t1-api >/dev/null; hk vb claim t3-web >/dev/null; hk vc claim t9-mis
 has "session start names your handle" "$(hk vb sync --hook)" "TEAM: you are @bob"
 fetchnow vb; eq "posttool silent with only FYI news" "$(pt vb)" ""
 s=$(date +%s); for i in 1 2 3 4 5 6 7 8 9 10; do pt vb >/dev/null; done; e=$(( $(date +%s) - s ))
-[ $e -le 2 ] && ok "posttool fast path: 10 calls in ${e}s" || no "posttool fast" "${e}s"
+lim=2; [ -n "$WIN" ] && lim=10; [ $e -le $lim ] && ok "posttool fast path: 10 calls in ${e}s" || no "posttool fast" "${e}s"
 hk va "done" t1-api contracts/api.ts:3 >/dev/null; fetchnow vb; fetchnow vc
 o=$(pt vb); has "dependency DONE is urgent mid-turn" "$o" "DONE t1-api"
 printf '%s' "$o" | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));process.exit(j.hookSpecificOutput.hookEventName==="PostToolUse"&&j.hookSpecificOutput.additionalContext.includes("TEAM URGENT")?0:1)' \
@@ -232,6 +244,11 @@ has "warns in a teammate's owned directory" "$(ptool va web/page.tsx)" "@bob's d
 eq "silent in my own directory" "$(ptool va api/route.ts)" ""
 eq "silent for unclaimed files" "$(ptool va README.md)" ""
 eq "silent outside the repo" "$(ptool va ../elsewhere.txt)" ""
+if [ -n "$WIN" ] && command -v cygpath >/dev/null; then
+  rm -f "$T/va/.hackathon/.warned"; wp=$(cygpath -w "$T/va/web/win.tsx" | sed 's#\\#\\\\#g')
+  o=$(cd "$T/va" && printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$wp" | bash .hackathon/bin/hk.sh pretool)
+  has "Windows C:\\ path is recognised" "$o" "@bob's directory web/"
+fi
 rm -f "$T/va/.hackathon/.warned"; o=$(cd "$T/va" && printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$T/va/web/x.tsx" | HK_COLLISION=warn bash .hackathon/bin/hk.sh pretool)
 has "HK_COLLISION=warn: context only" "$o" '"additionalContext"'; hasnt "HK_COLLISION=warn: no deny" "$o" "deny"
 
@@ -269,7 +286,8 @@ class H(http.server.BaseHTTPRequestHandler):
 s = http.server.HTTPServer(('127.0.0.1', 0), H)
 open(sys.argv[2], 'w').write(str(s.server_port)); s.serve_forever()
 PY
-python3 "$T/hook.py" "$T/posts" "$T/port" & SRV=$!
+if [ -n "$PY" ]; then
+"$PY" "$T/hook.py" "$T/posts" "$T/port" & SRV=$!
 waitfor '[ -s "$T/port" ]'; echo "http://127.0.0.1:$(cat "$T/port")/api/webhooks/test" > "$T/va/.hackathon/.discord"
 has "setter rejects non-Discord URLs" "$(hk va discord http://evil.example/x)" "usage"
 hk va log "BLOCKED waiting on stripe keys" >/dev/null
@@ -279,6 +297,7 @@ node -e 'const l=require("fs").readFileSync(process.argv[1],"utf8").trim().split
 n=$(wc -l < "$T/posts"); hk vb log "BLOCKED bob thing" >/dev/null; sleep 1
 eq "only your own events are posted from your clone" "$(wc -l < "$T/posts")" "$n"
 has "discord off" "$(hk va discord off)" "off"; [ ! -e "$T/va/.hackathon/.discord" ] && ok "webhook URL removed" || no "webhook URL removed"
+else echo "  (skipped: no working python for the fake webhook)"; fi
 
 echo "# v3: upgrading a v2 board in place"
 V2="$HARN/../hackathon-team-v2"

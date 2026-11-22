@@ -16,16 +16,19 @@ DST=$(cd "$DST" && pwd)
 [ "$DST" != "$SRC" ] || { echo "install.sh: target is the harness folder itself"; exit 1; }
 added=(); kept=(); merged=()
 
+put() { tr -d '\r' < "$SRC/$1" > "$DST/$1"; }   # LF only: CRLF breaks bash (zip downloads / autocrlf on Windows)
 owned() { # path: harness-owned file
-  local p=$1
+  local p=$1 tmp
   mkdir -p "$DST/$(dirname "$p")"
-  if [ ! -e "$DST/$p" ]; then cp "$SRC/$p" "$DST/$p"; added+=("$p")
-  elif cmp -s "$SRC/$p" "$DST/$p"; then :
-  elif [ $FORCE = 1 ]; then cp "$SRC/$p" "$DST/$p"; merged+=("$p (overwritten)")
+  tmp=$(mktemp); tr -d '\r' < "$SRC/$p" > "$tmp"
+  if [ ! -e "$DST/$p" ]; then put "$p"; added+=("$p")
+  elif cmp -s "$tmp" "$DST/$p"; then :
+  elif [ $FORCE = 1 ]; then put "$p"; merged+=("$p (overwritten)")
   else kept+=("$p (yours differs; --force to replace)"); fi
+  rm -f "$tmp"
 }
 once() { local p=$1; mkdir -p "$DST/$(dirname "$p")"
-  if [ -e "$DST/$p" ]; then kept+=("$p (kept yours)"); else cp "$SRC/$p" "$DST/$p"; added+=("$p"); fi; }
+  if [ -e "$DST/$p" ]; then kept+=("$p (kept yours)"); else put "$p"; added+=("$p"); fi; }
 
 for p in .claude/hooks/clock.sh .githooks/pre-push .githooks/post-commit .hackathon/bin/hk.sh \
          $(cd "$SRC" && ls .claude/agents/*.md .claude/commands/*.md); do owned "$p"; done
@@ -33,15 +36,19 @@ chmod +x "$DST/.claude/hooks/clock.sh" "$DST/.githooks/pre-push" "$DST/.githooks
 once .hackathon/PLAN.md
 once .hackathon/deadline
 
-# .gitignore: append missing lines
-if [ -e "$DST/.gitignore" ]; then
-  n=0; [ -z "$(tail -c1 "$DST/.gitignore")" ] || echo >> "$DST/.gitignore"
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    grep -qxF -- "$line" "$DST/.gitignore" || { echo "$line" >> "$DST/.gitignore"; n=$((n+1)); }
-  done < "$SRC/.gitignore"
-  [ $n -gt 0 ] && merged+=(".gitignore (+$n lines)")
-else cp "$SRC/.gitignore" "$DST/.gitignore"; added+=(.gitignore); fi
+# .gitignore / .gitattributes: append missing lines
+lines() { local f=$1 n=0 line
+  if [ -e "$DST/$f" ]; then
+    [ -z "$(tail -c1 "$DST/$f")" ] || echo >> "$DST/$f"
+    while IFS= read -r line; do line=${line%$'\r'}
+      [ -n "$line" ] || continue
+      grep -qxF -- "$line" "$DST/$f" || { echo "$line" >> "$DST/$f"; n=$((n+1)); }
+    done < "$SRC/$f"
+    [ $n -gt 0 ] && merged+=("$f (+$n lines)")
+  else put "$f"; added+=("$f"); fi
+  return 0; }
+lines .gitignore
+lines .gitattributes
 
 # CLAUDE.md: append the harness section once
 if [ ! -e "$DST/CLAUDE.md" ]; then cp "$SRC/CLAUDE.md" "$DST/CLAUDE.md"; added+=(CLAUDE.md)

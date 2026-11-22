@@ -42,11 +42,18 @@ R=$(gm config hk.remote 2>/dev/null || true)
 if [ -z "$R" ]; then if gm remote | grep -qx origin; then R=origin; else R=$(gm remote | head -n1); fi; fi
 RREF=refs/remotes/$R/$BR
 
+TMO=
 tmo(){ local s=$1; shift
-  if command -v timeout >/dev/null 2>&1; then timeout "$s" "$@"
-  elif command -v gtimeout >/dev/null 2>&1; then gtimeout "$s" "$@"
-  elif command -v perl >/dev/null 2>&1; then perl -e 'alarm shift; exec @ARGV' "$s" "$@"
-  else "$@"; fi; }
+  if [ -z "$TMO" ]; then TMO=none   # Windows has an unrelated timeout.exe (a pause command): require coreutils'
+    if timeout --version 2>/dev/null | grep -qi coreutils; then TMO=timeout
+    elif gtimeout --version 2>/dev/null | grep -qi coreutils; then TMO=gtimeout
+    elif command -v perl >/dev/null 2>&1; then TMO=perl; fi
+  fi
+  case $TMO in
+    timeout|gtimeout) "$TMO" "$s" "$@";;
+    perl) perl -e 'alarm shift; exec @ARGV' "$s" "$@";;
+    *) "$@";;
+  esac; }
 fetch1(){ tmo 20 git -C "$ROOT" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=10 \
   fetch -q "$R" "+refs/heads/$BR:$RREF" >/dev/null 2>&1; }
 fetch(){ [ -n "$R" ] || return 0; fetch1 || { sleep 1; fetch1; }; }
@@ -87,7 +94,8 @@ setup_cfg(){ # local-only config: merge driver (absolute path; git runs it from 
   gm check-ignore -q "$WT/" 2>/dev/null && return 0
   x=$(gm rev-parse --git-path info/exclude); case $x in /*) ;; *) x=$ROOT/$x;; esac
   mkdir -p "$(dirname "$x")"; echo "/.hackathon/state/" >> "$x"; }
-bg(){ nohup bash "$SELF" "$@" >/dev/null 2>&1 </dev/null & }
+bg(){ if command -v nohup >/dev/null 2>&1; then nohup bash "$SELF" "$@" >/dev/null 2>&1 </dev/null &
+  else bash "$SELF" "$@" >/dev/null 2>&1 </dev/null & fi; }
 bg_fetch_maybe(){ local last t; last=$(cat "$H/.fetched" 2>/dev/null || echo 0); t=$(now)
   [ $((t - last)) -ge "${HK_FETCH_EVERY:-20}" ] || return 0; echo "$t" > "$H/.fetched"; bg _bgfetch; }
 json_ctx(){ # event text -> hookSpecificOutput JSON with additionalContext
@@ -123,6 +131,7 @@ ensure_layout(){ # create/upgrade state files (v2 boards gain a deps column; SEE
   local ch=0
   [ -f "$WT/SEEN.md" ] || { printf '| id | seen |\n|---|---|\n' > "$WT/SEEN.md"; ch=1; }
   grep -q '^SEEN.md ' "$WT/.gitattributes" 2>/dev/null || { echo 'SEEN.md merge=hkboard' >> "$WT/.gitattributes"; ch=1; }
+  grep -q '^\* text eol=lf' "$WT/.gitattributes" 2>/dev/null || { echo '* text eol=lf' >> "$WT/.gitattributes"; ch=1; }
   if ! awk -F'|' "$AWKLIB"' hdr() { if ("deps" in C) f = 1; exit } END { exit !f }' "$WT/BOARD.md"; then
     awk -F'|' -v OFS='|' "$AWKLIB"'
       hdr() { s = C["status"]; $s = $s "| deps "; print; next }
@@ -241,7 +250,7 @@ init)
       printf '| id | owner | status | deps | ref |\n|---|---|---|---|---|\n' > "$WT/BOARD.md"
       : > "$WT/LOG.md"; echo "# Decisions (one line each, never re-argue)" > "$WT/DECISIONS.md"
       printf '| id | seen |\n|---|---|\n' > "$WT/SEEN.md"
-      printf 'BOARD.md merge=hkboard\nSEEN.md merge=hkboard\nLOG.md merge=union\nDECISIONS.md merge=union\n' > "$WT/.gitattributes"
+      printf '* text eol=lf\nBOARD.md merge=hkboard\nSEEN.md merge=hkboard\nLOG.md merge=union\nDECISIONS.md merge=union\n' > "$WT/.gitattributes"
       g add -A && g commit -qm "hackathon state: init ($ME)" || die "hk: initial state commit failed"
       if [ -n "$R" ] && ! push1; then   # someone created it at the same moment: use theirs
         fetch && rref >/dev/null && g reset -q --hard "$RREF" \
@@ -331,6 +340,10 @@ pretool) # before Edit/Write: warn once per file if a teammate claimed it or own
   inited || exit 0
   input=""; [ -t 0 ] || input=$(tmo 2 cat)   # hook JSON on stdin; never block on an open pipe
   f=$(printf '%s' "$input" | tr '\n' ' ' | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
+  f=$(printf '%s' "$f" | sed -e 's#\\\\#/#g' -e 's#\\#/#g')   # JSON-escaped and plain backslashes -> /
+  case $f in [A-Za-z]:/*)   # Windows drive path -> /c/... like Git Bash's pwd
+    if command -v cygpath >/dev/null 2>&1; then f=$(cygpath -u "$f")
+    else f="/$(printf '%s' "${f%%:*}" | tr 'A-Z' 'a-z')${f#?:}"; fi;; esac
   case $f in "$ROOT"/*) rel=${f#"$ROOT"/};; "$ROOTL"/*) rel=${f#"$ROOTL"/};; *) exit 0;; esac
   case $rel in .hackathon/*|.claude/*) exit 0;; esac
   grep -qxF -- "$rel" "$H/.warned" 2>/dev/null && exit 0

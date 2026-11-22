@@ -1,0 +1,5 @@
+# hackathon harness: scripts and hooks must keep LF line endings (Git for Windows defaults to CRLF)
+.hackathon/bin/hk.sh text eol=lf
+.githooks/* text eol=lf
+.claude/hooks/*.sh text eol=lf
+.hackathon/deadline text eol=lf

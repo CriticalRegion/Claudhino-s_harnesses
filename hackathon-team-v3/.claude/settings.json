@@ -70,7 +70,8 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/clock.sh\"",
-            "timeout": 10
+            "timeout": 10,
+            "shell": "bash"
           }
         ]
       },
@@ -80,13 +81,15 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.hackathon/bin/hk.sh\" sync --hook",
-            "timeout": 60
+            "timeout": 60,
+            "shell": "bash"
           },
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.hackathon/bin/hk.sh\" watch",
             "asyncRewake": true,
-            "timeout": 3600
+            "timeout": 3600,
+            "shell": "bash"
           }
         ]
       }
@@ -97,12 +100,14 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/clock.sh\" --quiet-unless-late",
-            "timeout": 10
+            "timeout": 10,
+            "shell": "bash"
           },
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.hackathon/bin/hk.sh\" peek",
-            "timeout": 10
+            "timeout": 10,
+            "shell": "bash"
           }
         ]
       }
@@ -113,7 +118,8 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.hackathon/bin/hk.sh\" posttool",
-            "timeout": 10
+            "timeout": 10,
+            "shell": "bash"
           }
         ]
       }
@@ -125,7 +131,8 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.hackathon/bin/hk.sh\" pretool",
-            "timeout": 10
+            "timeout": 10,
+            "shell": "bash"
           }
         ]
       }
@@ -137,7 +144,8 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.hackathon/bin/hk.sh\" watch",
             "asyncRewake": true,
-            "timeout": 3600
+            "timeout": 3600,
+            "shell": "bash"
           }
         ]
       }
