@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Marks you active on the team board (stale-claim detection). Runs in the background; never slows a commit.
+h="$(git rev-parse --show-toplevel)/.hackathon/bin/hk.sh"
+[ -f "$h" ] && nohup bash "$h" _beat >/dev/null 2>&1 </dev/null &
+exit 0
