@@ -6,12 +6,13 @@ Claude Code harnesses: drop-in project configs (rules, hooks, agents, slash comm
 
 | Folder | Built for | Focus | Status |
 |---|---|---|---|
-| [`hackathon-team-v1`](hackathon-team-v1/) | Hackathons, teams of 2-3 people each running their own agent | Low token use ([ponytail](https://github.com/DietrichGebert/ponytail), Haiku scout agent, read-deny rules), demo-first scoping, deadline clock, git-based agent coordination (board/log/claim/handoff) | v1, coordination layer tested locally on Linux; full harness not yet run in a live Claude Code session |
+| [`hackathon-team-v2`](hackathon-team-v2/) | Hackathons, teams of 2-4 people each running their own agent | Same as v1, with coordination on its own git branch (never pushes your code), honest offline handling, row-wise board merges, non-destructive `install.sh`, pinned plugin/MCP versions | v2, current. 82 end-to-end tests (`tests/run.sh`) on Linux; hooks, MCP and subagents verified in a live headless Claude Code 2.1.325 session; macOS untested |
+| [`hackathon-team-v1`](hackathon-team-v1/) | Hackathons, teams of 2-3 | Original version | Superseded by v2: board commands push unfinished code to main, report success when offline, and the install overwrites README/.gitignore (see v2 GUIDE, "Changes from v1") |
 
 ## How to use one
 
 1. Pick a folder from the table and read its `README.md` (short) or `GUIDE.md` (detailed).
-2. Copy the folder's **contents** (dotfiles included, hence `cp -r folder/. your-repo/`) into the root of your project.
+2. Install it into your project: `bash <folder>/install.sh your-repo` if the folder has an installer (v2+), otherwise copy the folder's **contents** (dotfiles included: `cp -r folder/. your-repo/`) and merge by hand anything you already have.
 3. Follow the folder's setup steps (plugin install, MCP sign-in, per-person init).
 
 ## Conventions for adding a harness or a variant
