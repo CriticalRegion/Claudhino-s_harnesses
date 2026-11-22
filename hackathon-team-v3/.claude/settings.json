@@ -126,7 +126,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|NotebookEdit",
+        "matcher": "Edit|Write|NotebookEdit|AskUserQuestion",
         "hooks": [
           {
             "type": "command",
@@ -142,9 +142,27 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.hackathon/bin/hk.sh\" autostop",
+            "timeout": 10,
+            "shell": "bash"
+          },
+          {
+            "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.hackathon/bin/hk.sh\" watch",
             "asyncRewake": true,
             "timeout": 3600,
+            "shell": "bash"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.hackathon/bin/hk.sh\" permit",
+            "timeout": 10,
             "shell": "bash"
           }
         ]

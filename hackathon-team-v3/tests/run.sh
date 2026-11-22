@@ -299,6 +299,67 @@ eq "only your own events are posted from your clone" "$(wc -l < "$T/posts")" "$n
 has "discord off" "$(hk va discord off)" "off"; [ ! -e "$T/va/.hackathon/.discord" ] && ok "webhook URL removed" || no "webhook URL removed"
 else echo "  (skipped: no working python for the fake webhook)"; fi
 
+echo "# v3: autonomous mode"
+git init -q "$T/seed5"; bash "$HARN/install.sh" "$T/seed5" >/dev/null 2>&1; cd "$T/seed5" || exit 1
+git add -A; git commit -qm init; git init -q --bare "$T/r5.git"; git remote add origin "$T/r5.git"; git push -q -u origin main
+git clone -q "$T/r5.git" "$T/xa"; git clone -q "$T/r5.git" "$T/xb"; hk xa init alice >/dev/null; hk xb init bob >/dev/null
+r5_log(){ git -C "$T/r5.git" show hackathon-state:LOG.md; }
+stp(){ (cd "$T/$1" && printf '{"hook_event_name":"Stop","stop_hook_active":false}' | bash .hackathon/bin/hk.sh autostop); }
+prm(){ (cd "$T/$1" && printf '{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"uname -a"}}' | bash .hackathon/bin/hk.sh permit); }
+askq(){ (cd "$T/$1" && printf '{"tool_name":"AskUserQuestion","tool_input":{"questions":[]}}' | bash .hackathon/bin/hk.sh pretool); }
+has "status: off by default" "$(hk xb auto status)" "autonomous off"
+eq "permit silent when off" "$(prm xb)" ""; eq "autostop silent when off" "$(stp xb)" ""; eq "questions allowed when off" "$(askq xb)" ""
+hk xa add a1 api/ >/dev/null; hk xa add a2 web/ --after a1 >/dev/null; hk xb sync >/dev/null
+o=$(hk xa auto on 2h); has "auto on is team-wide" "$o" "AUTO ON until"; has "auto on warns" "$o" "deny list still blocks"
+has "mode stored on the state branch" "$(git -C "$T/r5.git" show hackathon-state:MODE.md)" "| auto | on |"
+fetchnow xb; has "AUTO ON is urgent for everyone" "$(pt xb)" "AUTO ON"
+has "session start says autonomous" "$(hk xb sync --hook)" "AUTONOMOUS MODE ON until"
+o=$(prm xb); printf '%s' "$o" | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8")).hookSpecificOutput;process.exit(j.hookEventName==="PermissionRequest"&&j.decision.behavior==="allow"?0:1)' \
+  && ok "permission prompts auto-approved" || no "permit allow JSON" "$o"
+o=$(askq xb); has "questions to the human refused" "$o" '"permissionDecision":"deny"'; has "told to decide and log" "$o" "hk.sh decide"
+printf '%s' "$o" | node -e 'JSON.parse(require("fs").readFileSync(0,"utf8"))' && ok "AskUserQuestion deny is valid JSON" || no "ask deny JSON" "$o"
+o=$(stp xb); has "autostop keeps going: claim next task" "$o" "claim a1"
+printf '%s' "$o" | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));process.exit(j.hookSpecificOutput.hookEventName==="Stop"&&j.hookSpecificOutput.additionalContext.includes("AUTONOMOUS")?0:1)' && ok "autostop emits valid continue JSON" || no "autostop JSON" "$o"
+o=$(cd "$T/xb" && printf '{}' | HK_STOP_STYLE=block bash .hackathon/bin/hk.sh autostop); has "HK_STOP_STYLE=block form" "$o" '"decision":"block"' 
+hk xb claim a1 >/dev/null; has "autostop: finish own task first" "$(stp xb)" "Finish your task a1"
+hk xb "done" a1 api/x.ts:1 >/dev/null; has "autostop: dependency done -> next task" "$(stp xb)" "claim a2"
+hk xb claim a2 >/dev/null; hk xb "done" a2 web/x.tsx:1 >/dev/null
+eq "autostop: board done, no URL in PLAN -> may stop" "$(stp xb)" ""
+sed -i.bak 's#^- Live URL:.*#- Live URL: http://localhost:3000#' "$T/xb/.hackathon/PLAN.md" && rm -f "$T/xb/.hackathon/PLAN.md.bak"
+has "autostop: board done, URL set -> demo check" "$(stp xb)" "run /demo-check"
+hk xb demo green http://localhost:3000 >/dev/null; eq "autostop: work ran out -> may stop" "$(stp xb)" ""
+hk xa demo red "step 2 checkout 500" >/dev/null; fetchnow xb; has "autostop: DEMO RED -> fix it" "$(stp xb)" "demo is RED"
+stp xb >/dev/null; stp xb >/dev/null; stp xb >/dev/null; eq "no progress after 3 tries -> stops" "$(stp xb)" ""
+waitfor 'r5_log | grep -q "STUCK (autonomous)"' && ok "STUCK logged for the humans" || no "STUCK logged" "$(r5_log | tail -2)"
+hk xa demo green ok >/dev/null; fetchnow xb
+hk xb auto off --me >/dev/null; eq "per-person override off" "$(prm xb)" ""; has "status shows override" "$(hk xb auto status)" "overrides: off"
+hk xb auto clear --me >/dev/null; [ -n "$(prm xb)" ] && ok "clear -> follows team again" || no "clear override"
+hk xb log "ASK @alice: which db?" >/dev/null; fetchnow xa; hk xa log "ANSWER @bob: sqlite" >/dev/null
+hk xb log "ASK @alice: which version?" >/dev/null; fetchnow xa; pt xa >/dev/null
+waitfor 'r5_log | grep -q "ESCALATE @bob -> @alice"' && { fetchnow xb; has "autonomous asker gets ESCALATE as urgent (decides itself)" "$(pt xb)" "ESCALATE @bob -> @alice"; } || no "escalate in auto"
+hk xa auto on 2s >/dev/null; sleep 3; fetchnow xb; eq "time budget expires" "$(prm xb)" ""
+hk xa auto on >/dev/null; hk xa auto off >/dev/null; fetchnow xb; has "AUTO OFF reaches everyone" "$(pt xb)" "AUTO OFF"; eq "permit off again" "$(prm xb)" ""
+eq "bad duration refused" "$(hkrc xa auto on soon)" 1
+
+echo "# v3: solo mode"
+hk xa add s1 misc/ >/dev/null; hk xa claim s1 >/dev/null
+o=$(hk xa solo @bob 1h); has "solo set" "$o" "SOLO @bob until"
+fetchnow xb; has "solo agent is told" "$(pt xb)" "SOLO @bob"
+has "solo agent's session line" "$(hk xb sync --hook)" "SOLO MODE: you (@bob) finish alone"
+[ -n "$(prm xb)" ] && ok "solo agent is autonomous" || no "solo agent autonomous"
+fetchnow xa; eq "others are not autonomous" "$(prm xa)" ""; has "others' session line: muted" "$(hk xa sync --hook)" "muted for you"
+hk xb log "ASK @alice: anything?" >/dev/null; fetchnow xa; eq "muted: no urgent events" "$(pt xa)" ""; hasnt "muted: no FYI at prompt" "$(hk xa peek)" "anything?"
+hk xa note "@bob please fix the header" >/dev/null; fetchnow xb; has "solo agent still gets human notes" "$(pt xb)" "NOTE @bob please fix the header"
+hk xa log "ASK @bob: status?" >/dev/null; fetchnow xb; eq "solo agent: teammates' asks aren't urgent" "$(pt xb)" ""
+has "solo agent takes any task" "$(hk xb claim s1)" "TOOK-OVER s1"
+hk xa log "CLAIM-FILE misc/x.ts" >/dev/null; fetchnow xb
+eq "solo agent: no collision warnings" "$(cd "$T/xb" && printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$T/xb/misc/x.ts" | bash .hackathon/bin/hk.sh pretool)" ""
+hk xb solo off >/dev/null; fetchnow xa; has "SOLO OFF reaches the muted" "$(pt xa)" "SOLO OFF"; eq "solo agent back to normal" "$(prm xb)" ""
+
+echo "# claims don't swallow teammates' news"
+hk xb log "BLOCKED on keys" >/dev/null; hk xa add c1 - >/dev/null; hk xa claim c1 >/dev/null
+has "line pulled in by a claim still shown" "$(hk xa peek)" "BLOCKED on keys"
+
 echo "# v3: upgrading a v2 board in place"
 V2="$HARN/../hackathon-team-v2"
 if [ -f "$V2/.hackathon/bin/hk.sh" ]; then

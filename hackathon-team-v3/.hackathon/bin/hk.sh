@@ -15,7 +15,12 @@
 #   demo green|red "<details>"       demo-path health after a deploy
 #   board                            print the board
 #   discord <webhook-url>|off|test   also post your events to a Discord channel (URL stays local)
-# Hooks: peek, posttool, pretool, watch (exit 2 = wake the agent), contract, _beat, _bgfetch, _mergeboard
+#   auto on [2h] [--me] | off [--me] | clear --me | status
+#                                    autonomous mode: agents approve their own prompts (deny list still
+#                                    applies), never wait for a human, keep going until work runs out
+#   solo @name [2h] | off            one agent finishes alone (autonomous); everyone else is muted
+# Hooks: peek, posttool, pretool, watch (exit 2 = wake the agent), permit, autostop, contract,
+#        _beat, _bgfetch, _mergeboard
 #
 # Exit codes: 0 ok, 1 refused/failed (nothing changed remotely), 2 saved locally but NOT pushed.
 set -u
@@ -31,7 +36,7 @@ export GIT_TERMINAL_PROMPT=0 HK_SKIP=1
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes -o ConnectTimeout=8}"
 CMD=${1:-}; [ $# -gt 0 ] && shift
 
-quiet_cmd(){ case $CMD in peek|posttool|pretool|watch|contract|_beat|_bgfetch|_post) return 0;; esac
+quiet_cmd(){ case $CMD in peek|posttool|pretool|watch|permit|autostop|contract|_beat|_bgfetch|_post) return 0;; esac
   [ "$CMD" = sync ] && [ "${1:-}" = --hook ]; }
 die(){ echo "$*"; exit 1; }
 gm(){ git -C "$ROOT" "$@"; }
@@ -121,15 +126,17 @@ open_tasks(){ awk -F'|' -v now="$(now)" -v lim=$((STALE_MIN*60)) "$AWKLIB"'
     if (s == "doing" && (o in last) && now - last[o] > lim) line = line "  STALE (@" substr(o, 2) " inactive " int((now - last[o]) / 60) "m)"
     print line }' "$WT/SEEN.md" "$WT/BOARD.md"; }
 is_stale(){ open_tasks | awk -F'|' -v id="$1" '{k=$2; gsub(/ /,"",k)} k==id && /STALE/ {f=1} END{exit !f}'; }
-touch_seen(){ local t; t=$(now)
-  if grep -q "^| @$ME |" "$WT/SEEN.md" 2>/dev/null; then
-    HK_K="@$ME" HK_V="$t" awk -F'|' -v OFS='|' '{k=$2; gsub(/^[ \t]+|[ \t]+$/,"",k)}
-      k==ENVIRON["HK_K"] {$3=" " ENVIRON["HK_V"] " "} {print}' "$WT/SEEN.md" > "$WT/SEEN.md.tmp" && mv "$WT/SEEN.md.tmp" "$WT/SEEN.md"
-  else echo "| @$ME | $t |" >> "$WT/SEEN.md"; fi
-  echo "$t" > "$H/.beat"; }
+upsert(){ # file key value: set column 2 of the row keyed by column 1 (append if missing)
+  if grep -q "^| $2 |" "$WT/$1" 2>/dev/null; then
+    HK_K="$2" HK_V="$3" awk -F'|' -v OFS='|' '{k=$2; gsub(/^[ \t]+|[ \t]+$/,"",k)}
+      k==ENVIRON["HK_K"] {$3=" " ENVIRON["HK_V"] " "} {print}' "$WT/$1" > "$WT/$1.tmp" && mv "$WT/$1.tmp" "$WT/$1"
+  else echo "| $2 | $3 |" >> "$WT/$1"; fi; }
+touch_seen(){ local t; t=$(now); upsert SEEN.md "@$ME" "$t"; echo "$t" > "$H/.beat"; }
 ensure_layout(){ # create/upgrade state files (v2 boards gain a deps column; SEEN.md added)
   local ch=0
   [ -f "$WT/SEEN.md" ] || { printf '| id | seen |\n|---|---|\n' > "$WT/SEEN.md"; ch=1; }
+  [ -f "$WT/MODE.md" ] || { printf '| id | value |\n|---|---|\n| auto | off |\n| auto_until | 0 |\n| solo | - |\n| solo_until | 0 |\n' > "$WT/MODE.md"; ch=1; }
+  grep -q '^MODE.md ' "$WT/.gitattributes" 2>/dev/null || { echo 'MODE.md merge=hkboard' >> "$WT/.gitattributes"; ch=1; }
   grep -q '^SEEN.md ' "$WT/.gitattributes" 2>/dev/null || { echo 'SEEN.md merge=hkboard' >> "$WT/.gitattributes"; ch=1; }
   grep -q '^\* text eol=lf' "$WT/.gitattributes" 2>/dev/null || { echo '* text eol=lf' >> "$WT/.gitattributes"; ch=1; }
   if ! awk -F'|' "$AWKLIB"' hdr() { if ("deps" in C) f = 1; exit } END { exit !f }' "$WT/BOARD.md"; then
@@ -139,6 +146,78 @@ ensure_layout(){ # create/upgrade state files (v2 boards gain a deps column; SEE
       { print }' "$WT/BOARD.md" > "$WT/BOARD.md.tmp" && mv "$WT/BOARD.md.tmp" "$WT/BOARD.md"; ch=1
   fi
   [ $ch = 0 ] || { g add -A && g commit -qm "layout v3 ($ME)" >/dev/null; }; }
+
+# ---- modes: autonomous (team switch + per-person override) and solo ----
+mode_get(){ awk -F'|' -v k="$1" '{x=$2; gsub(/^[ \t]+|[ \t]+$/,"",x)} x==k {v=$3; gsub(/^[ \t]+|[ \t]+$/,"",v); print v; exit}' "$WT/MODE.md" 2>/dev/null; }
+hm(){ date -d "@$1" +%H:%M 2>/dev/null || date -r "$1" +%H:%M 2>/dev/null; }
+dur(){ # 90m / 2h / 30s / bare minutes -> seconds
+  case $1 in *[!0-9smh]*|'') return 1;; *h) echo $(( ${1%h} * 3600 ));; *m) echo $(( ${1%m} * 60 ));; *s) echo "${1%s}";; *) echo $(( $1 * 60 ));; esac; }
+eff_auto(){ # "on <until-epoch|0>" or "off <why>" for MY agent
+  local solo loc u m t; t=$(now)
+  m=$(mins_left); [ -n "$m" ] && [ "$m" -le 0 ] && { echo "off deadline"; return; }
+  solo=$(mode_get solo); loc=$(cat "$H/.auto" 2>/dev/null || true)
+  if [ -n "$solo" ] && [ "$solo" != - ]; then
+    [ "$solo" = "@$ME" ] || { echo "off solo-other"; return; }
+    [ "${loc%% *}" = off ] && { echo "off local"; return; }
+    u=$(mode_get solo_until)
+  elif [ -n "$loc" ]; then
+    [ "${loc%% *}" = on ] || { echo "off local"; return; }; u=${loc#on }; [ "$u" = on ] && u=0
+  else
+    [ "$(mode_get auto)" = on ] || { echo "off team"; return; }; u=$(mode_get auto_until)
+  fi
+  u=${u:-0}; [ "$u" != 0 ] && [ "$t" -ge "$u" ] && { echo "off budget"; return; }
+  echo "on $u"; }
+auto_on(){ [ "$(eff_auto | cut -d' ' -f1)" = on ]; }
+mode_line(){ # what the agent is told at session start / in status
+  local st solo u; st=$(eff_auto); solo=$(mode_get solo)
+  if [ -n "$solo" ] && [ "$solo" != - ]; then
+    if [ "$solo" = "@$ME" ]; then echo "SOLO MODE: you (@$ME) finish alone. You may edit any file, change contracts and take any task; nobody else is working."
+    else echo "SOLO MODE: $solo is finishing alone; team notifications are muted for you. Work only if your human asks, and keep out of files $solo is changing."; fi
+  fi
+  if [ "${st%% *}" = on ]; then u=${st#on }; [ "$u" = 0 ] && u="" || u=" until $(hm "$u")"
+    echo "AUTONOMOUS MODE ON$u: don't wait for or ask the human. Decide, log it with hk.sh decide, and keep going until your work runs out (rules in CLAUDE.md)."; fi; }
+next_step(){ # the next concrete thing an autonomous agent should do, or nothing when work has run out
+  local solo nx last ld lr
+  solo=$(mode_get solo)
+  if [ "$solo" = "@$ME" ]; then
+    nx=$(awk -F'|' -v me="@$ME" "$AWKLIB"' hdr() { next } isrow() && trim($(C["status"])) != "done" {
+      o = trim($(C["owner"])); id = trim($2); r = trim($(C["ref"]))
+      if (o == me) { print "Finish task " id " (" r "), then /handoff " id " <path:line>."; exit }
+      if (!f) f = "Task " id " (" r ", owner " o ") is still open: take it with hk.sh claim " id " and finish it." }
+      END { if (f) print f }' "$WT/BOARD.md" | head -n1)
+  else
+    nx=$(awk -F'|' -v me="@$ME" "$AWKLIB"' hdr() { next }
+      isrow() { id = trim($2); st[id] = trim($(C["status"])); ow[id] = trim($(C["owner"])); dp[id] = trim($(C["deps"])); rf[id] = trim($(C["ref"])); ord[++n] = id }
+      END { for (i = 1; i <= n; i++) { id = ord[i]; if (ow[id] == me && st[id] != "done") { print "Finish your task " id " (" rf[id] "), then /handoff " id " <path:line>."; exit } }
+        for (i = 1; i <= n; i++) { id = ord[i]; if (st[id] != "todo" || ow[id] != "-") continue
+          ok = 1; k = split(dp[id], d, ","); for (j = 1; j <= k; j++) if (d[j] != "-" && d[j] != "" && st[d[j]] != "done") ok = 0
+          if (ok) { print "Claim the next task: bash .hackathon/bin/hk.sh claim " id " (" rf[id] "), then build it with /slice."; exit } } }' "$WT/BOARD.md")
+  fi
+  [ -n "$nx" ] && { echo "$nx"; return; }
+  ld=$(grep -n ' DEMO ' "$WT/LOG.md" 2>/dev/null | tail -n1); lr=$(grep -n ' DONE ' "$WT/LOG.md" 2>/dev/null | tail -n1 | cut -d: -f1)
+  last=${ld#*:}
+  case $last in
+    *" DEMO RED"*) echo "The demo is RED ($last). Fix it if the failing step is yours (or you're solo); then /demo-check." ;;
+    *) url=$(grep -iE '^- *(Live URL|Dev command)' "$H/PLAN.md" 2>/dev/null | sed 's/^[^:]*://' | tr -d '[:space:]')
+       if [ -n "$url" ] && [ -n "$lr" ] && { [ -z "$ld" ] || [ "${ld%%:*}" -lt "$lr" ]; }; then echo "All tasks are done but the demo hasn't been checked since: run /demo-check."; fi ;;
+  esac; }
+mode_publish(){ # "k=v k=v" "log line": team-wide mode change; needs the remote so everyone sees it
+  local kv attempt rc before
+  need; lock
+  for attempt in 1 2 3 4 5; do
+    before=$(rref); state_pull; rc=$?
+    [ $rc = 1 ] && die "OFFLINE: can't reach '$R'. Mode NOT changed (teammates wouldn't see it); retry when online."
+    [ $rc = 2 ] && { conflict_msg; exit 1; }
+    ensure_layout
+    for kv in $1; do upsert MODE.md "${kv%%=*}" "${kv#*=}"; done
+    logline "$2"; touch_seen
+    g add -A && g commit -qm "mode ($ME)" >/dev/null || die "hk: commit failed"
+    [ -n "$R" ] || { echo "$2 (no remote: local only)"; return 0; }
+    push1 && { announce "$before"; echo "$2"; return 0; }
+    g reset -q --hard HEAD~1
+  done
+  die "mode NOT changed: push kept failing. Run hk.sh sync and retry."; }
+AUTO_WARN="Note: autonomous agents approve their own permission prompts (the deny list still blocks force-push, rm -rf / and .env reads) and act on teammates' board messages without asking anyone. For long unattended runs prefer a container. Stop it any time: hk.sh auto off (team) / --me."
 
 # ---- events: news between two state commits, then routing (urgent / fyi / escalate) ----
 news(){ # teammates' added lines between $1 and $2: log + decisions lines, and open task rows
@@ -151,7 +230,7 @@ owners(){ # "dir @name" pairs from the Owners line in PLAN.md
     | sed -n 's/^[[:space:]]*\([^[:space:]]*\)[[:space:]]*->[[:space:]]*\(@[a-z0-9_-]*\).*/\1 \2/p'; }
 mins_left(){ bash "$CLOCK" --minutes 2>/dev/null; }
 route(){ # tag each new line: "U " urgent for me, "E " escalate (2nd round trip), "F " fyi
-  local n mine deps refs dirs touched late answered m
+  local n mine deps refs dirs touched late answered m solo am
   n=$(news "$1" "$2"); [ -n "$n" ] || return 0
   mine=$(awk -F'|' -v me="@$ME" "$AWKLIB"' hdr() { next } isrow() && trim($(C["owner"])) == me && trim($(C["status"])) != "done" { print trim($2) }' "$WT/BOARD.md")
   deps=$(for t in $mine; do get "$t" deps; done | tr ',' ' ' | tr -s ' ' '\n' | grep -v '^-*$' | sort -u)
@@ -159,18 +238,22 @@ route(){ # tag each new line: "U " urgent for me, "E " escalate (2nd round trip)
   dirs=$(owners | awk -v me="@$ME" '$2==me {printf "%s ", $1}')
   touched=$({ gm diff --name-only HEAD 2>/dev/null; gm diff --name-only '@{u}..HEAD' 2>/dev/null; } | sort -u | tr '\n' ' ')
   m=$(mins_left); late=0; [ -n "$m" ] && [ "$m" -le 240 ] && late=1
+  solo=$(mode_get solo); solo=${solo:--}; am=off; auto_on && am=on
   answered=$(awk -v me="$ME" -v nowm="$(date +%H:%M)" '
     function mins(t,  a) { split(t, a, ":"); return a[1] * 60 + a[2] }
     $2 == "@" me && $3 == "ANSWER" && (mins(nowm) - mins($1) + 1440) % 1440 <= 30 { x = $4; sub(/:$/, "", x); printf " %s ", x }' "$WT/LOG.md")
   printf '%s\n' "$n" | awk -v me="@$ME" -v deps=" $(echo $deps) " -v refs="$refs" -v dirs="$dirs" \
-      -v touched="$touched" -v late="$late" -v answered="$answered" '
+      -v touched="$touched" -v late="$late" -v answered="$answered" -v solo="$solo" -v am="$am" '
     function under(p, list,   k, a, i) { k = split(list, a, " ")
       for (i = 1; i <= k; i++) if (a[i] != "" && (index(p, a[i]) == 1 || index(a[i], p) == 1)) return 1; return 0 }
     {
       line = $0; c = "F"
-      if (line ~ /^\|/) { print "F " line; next }
       k = split(line, w, " "); actor = w[2]; verb = w[3]; arg = w[4]; a2 = arg; sub(/:$/, "", a2)
-      if (verb == "ESCALATE") c = "F"
+      if (line !~ /^\|/ && (verb == "AUTO" || verb == "SOLO")) { print "U " line; next }   # mode changes reach everyone
+      if (solo != "-" && solo != me) { print "M " line; next }                              # muted: someone else is solo
+      if (line ~ /^\|/) { print "F " line; next }
+      if (solo == me) { print ((verb == "NOTE" && a2 == me) ? "U " : "F ") line; next }     # solo: only human notes are urgent
+      if (verb == "ESCALATE") c = (am == "on" && arg == me) ? "U" : "F"                    # autonomous asker decides itself
       else if (verb == "ASK" && a2 == me) c = index(answered, " " actor " ") ? "E" : "U"
       else if (verb == "DONE" && index(deps, " " arg " ")) c = "U"
       else if (verb == "CONTRACT-CHANGED") { for (i = 4; i <= k; i++) if (w[i] ~ /\// && under(w[i], refs)) c = "U" }
@@ -272,7 +355,7 @@ sync)
   escalate "$(route "$(cat "$H/.ucur" 2>/dev/null || true)" HEAD)"
   cursors_set
   u=$(tagged U "$rt"); f=$(tagged F "$rt"); e=$(tagged E "$rt")
-  [ "${1:-}" = --hook ] && echo "TEAM: you are @$ME; lines addressed to @$ME are for you."
+  [ "${1:-}" = --hook ] && { echo "TEAM: you are @$ME; lines addressed to @$ME are for you."; mode_line; }
   [ -n "$u" ] && { echo "URGENT FOR YOU (@$ME):"; echo "$u"; }
   [ -n "$f$e" ] && { echo "NEW:"; [ -n "$f" ] && echo "$f"; [ -n "$e" ] && printf '%s\n' "$e" | sed 's/^/ESCALATED (humans decide): /'; }
   t=$(open_tasks); echo "OPEN TASKS:"; echo "${t:-(none)}" ;;
@@ -336,9 +419,16 @@ watch) # Stop/SessionStart hook with asyncRewake: wait for an urgent event, then
   done
   exit 0 ;;
 
-pretool) # before Edit/Write: warn once per file if a teammate claimed it or owns its directory
+pretool) # before Edit/Write: warn once per file if a teammate claimed it or owns its directory;
+         # before AskUserQuestion in autonomous mode: refuse, the agent decides itself
   inited || exit 0
   input=""; [ -t 0 ] || input=$(tmo 2 cat)   # hook JSON on stdin; never block on an open pipe
+  if printf '%s' "$input" | grep -q '"tool_name"[[:space:]]*:[[:space:]]*"AskUserQuestion"'; then
+    auto_on || exit 0
+    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"AUTONOMOUS MODE: nobody will answer. Pick the option you judge best for the demo, log it with bash .hackathon/bin/hk.sh decide \\"<choice and why>\\", and continue."}}\n'
+    exit 0
+  fi
+  [ "$(mode_get solo)" = "@$ME" ] && exit 0   # solo: you own the whole repo
   f=$(printf '%s' "$input" | tr '\n' ' ' | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
   f=$(printf '%s' "$f" | sed -e 's#\\\\#/#g' -e 's#\\#/#g')   # JSON-escaped and plain backslashes -> /
   case $f in [A-Za-z]:/*)   # Windows drive path -> /c/... like Git Bash's pwd
@@ -387,6 +477,7 @@ _post) # Discord webhook post (background). Mentions are disabled so nobody gets
     { e = "•"; if ($3 == "DONE") e = "✅"; else if ($3 == "BLOCKED") e = "⛔"; else if ($3 == "ASK") e = "❓";
       else if ($3 == "ANSWER") e = "💬"; else if ($3 == "ESCALATE") e = "🚨"; else if ($3 == "CLAIMED" || $3 == "TOOK-OVER") e = "🙋";
       else if ($3 == "NOTE") e = "📝"; else if ($3 == "CONTRACT-CHANGED") e = "📜"; else if ($3 == "DEMO") e = ($4 == "RED") ? "🔴" : "🟢";
+      else if ($3 == "AUTO") e = "🤖"; else if ($3 == "SOLO") e = "🎯"; else if ($3 == "STUCK") e = "🧱";
       if (NR <= 15) print e " " substr($0, 1, 300) }')
   body=$(printf '%s' "$text" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
   printf '{"content":"%s","allowed_mentions":{"parse":[]}}' "$body" \
@@ -432,7 +523,8 @@ claim)
     [ "$status" = "done" ] && die "ALREADY DONE: $id"
     ev="CLAIMED $id"
     if [ "$owner" != "-" ] && [ -n "$owner" ]; then
-      if [ $take = 1 ]; then
+      if [ "$(mode_get solo)" = "@$ME" ]; then ev="TOOK-OVER $id from $owner (solo)"
+      elif [ $take = 1 ]; then
         is_stale "$id" || die "NOT STALE: $owner is still active on $id (stale after ${STALE_MIN}m of no commits/board activity)"
         ev="TOOK-OVER $id from $owner (stale)"
       else
@@ -444,7 +536,7 @@ claim)
     setcol "$id" owner "@$ME"; setcol "$id" status doing; logline "$ev"; touch_seen
     g add -A && g commit -qm "claim $id ($ME)" >/dev/null || die "hk: commit failed"
     [ -n "$R" ] || { echo "CLAIMED $id (no remote: local only)"; exit 0; }
-    push1 && { cursors_set; announce "$before"; echo "${ev%% (*}"; exit 0; }
+    push1 && { announce "$before"; echo "${ev%% (*}"; exit 0; }
     g reset -q --hard HEAD~1   # drop our claim, re-read the latest board, try again
   done
   die "claim NOT made: push kept failing. Run hk.sh sync and retry." ;;
@@ -505,6 +597,64 @@ discord)
       (umask 077; printf '%s\n' "$1" > "$H/.discord"); echo "discord: on. URL saved in .hackathon/.discord (gitignored). Try: hk.sh discord test" ;;
     *) die "usage: hk.sh discord <https://discord.com/api/webhooks/...> | off | test" ;;
   esac ;;
+
+auto)
+  sub=${1:-status}; [ $# -gt 0 ] && shift
+  me=0; d=10800
+  for a in "$@"; do case $a in --me) me=1;; *) d=$(dur "$a") || die "usage: hk.sh auto on [90m|2h] [--me] | off [--me] | clear --me | status";; esac; done
+  case $sub in
+    on) need; until=$(( $(now) + d ))
+      if [ $me = 1 ]; then echo "on $until" > "$H/.auto"; echo "AUTONOMOUS ON for @$ME until $(hm "$until") (this clone only)."
+      else mode_publish "auto=on auto_until=$until" "AUTO ON until $(hm "$until") (set by @$ME): agents work without waiting for humans; hk.sh auto off stops them"; fi
+      echo "$AUTO_WARN" ;;
+    off) need
+      if [ $me = 1 ]; then echo off > "$H/.auto"; echo "AUTONOMOUS OFF for @$ME (this clone only, whatever the team setting)."
+      else mode_publish "auto=off auto_until=0" "AUTO OFF (by @$ME): agents stop and wait for their humans"; fi ;;
+    clear) need; rm -f "$H/.auto"; echo "@$ME follows the team setting again." ;;
+    status) need
+      echo "team: auto $(mode_get auto)$( u=$(mode_get auto_until); [ "${u:-0}" != 0 ] && echo " until $(hm "$u")"), solo $(mode_get solo)"
+      [ -f "$H/.auto" ] && echo "this clone overrides: $(cut -d' ' -f1 "$H/.auto")"
+      st=$(eff_auto); echo "you (@$ME): autonomous ${st%% *} (${st#* })"
+      mode_line ;;
+    *) die "usage: hk.sh auto on [90m|2h] [--me] | off [--me] | clear --me | status" ;;
+  esac ;;
+
+solo)
+  who=${1:-}; [ $# -gt 0 ] && shift
+  case $who in
+    off) mode_publish "solo=- solo_until=0" "SOLO OFF (by @$ME): everyone back to normal; check the board with /sync" ;;
+    @*) printf '%s' "$who" | grep -Eq '^@[a-z0-9][a-z0-9_-]*$' || die "usage: hk.sh solo @name [2h] | off"
+      d=10800; [ $# -gt 0 ] && { d=$(dur "$1") || die "usage: hk.sh solo @name [2h] | off"; }
+      need; until=$(( $(now) + d ))
+      grep -q "^| $who |" "$WT/SEEN.md" 2>/dev/null || echo "warning: $who hasn't been active on this board yet (typo?)"
+      mode_publish "solo=$who solo_until=$until" "SOLO $who until $(hm "$until") (set by @$ME): $who finishes alone, autonomous, and may change anything; everyone else is muted"
+      echo "$AUTO_WARN" ;;
+    *) die "usage: hk.sh solo @name [2h] | off" ;;
+  esac ;;
+
+permit) # PermissionRequest hook: in autonomous mode approve the prompt (deny rules never reach here)
+  inited || exit 0
+  [ -t 0 ] || tmo 2 cat >/dev/null
+  auto_on || exit 0
+  printf '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}\n'
+  exit 0 ;;
+
+autostop) # Stop hook: in autonomous mode keep the agent going while work remains
+  inited || exit 0
+  [ -t 0 ] || tmo 2 cat >/dev/null
+  st=$(eff_auto); [ "${st%% *}" = on ] || { rm -f "$H/.autofp"; exit 0; }
+  nx=$(next_step); [ -n "$nx" ] || { rm -f "$H/.autofp"; exit 0; }   # work ran out: let it stop
+  fp=$( { cat "$WT/BOARD.md" "$WT/LOG.md"; gm rev-parse HEAD; gm status --porcelain; } 2>/dev/null | cksum | cut -d' ' -f1)
+  pf=""; cnt=0; [ -f "$H/.autofp" ] && read -r pf cnt < "$H/.autofp"
+  if [ "$fp" = "$pf" ]; then cnt=$((cnt + 1)); else cnt=0; fi
+  if [ "$cnt" -ge "${HK_AUTO_STUCK:-3}" ]; then   # no progress at all: stop instead of spinning, tell the humans
+    rm -f "$H/.autofp"; bg log "STUCK (autonomous): no progress after $cnt tries on: $nx"; exit 0; fi
+  echo "$fp $cnt" > "$H/.autofp"
+  u=${st#on }; [ "$u" = 0 ] && u="" || u=" until $(hm "$u")"
+  json_reason=$(printf '%s' "AUTONOMOUS MODE$u: don't stop and don't wait for a human. Next: $nx Decide anything unclear yourself and log it with bash .hackathon/bin/hk.sh decide." | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+  if [ "${HK_STOP_STYLE:-context}" = block ]; then printf '{"decision":"block","reason":"%s"}\n' "$json_reason"
+  else printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$json_reason"; fi
+  exit 0 ;;
 
 board) need; cat "$WT/BOARD.md" ;;
 
