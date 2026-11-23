@@ -76,7 +76,22 @@ A plugin that makes the agent behave like a "lazy senior dev": check whether cod
 - Maker's benchmark: ~54% less code, ~20% lower cost. JetBrains' independent test: ~15% less code, ~10% lower cost, 11% faster. Plan on the smaller numbers.
 
 ### CLAUDE.md
-Loaded every turn, so it's short. Demo path only; vertical slice first; fake what judges can't see and mark it `FAKE:`; boring hosted stack; check docs via context7; deploy early; push to main only when it runs; obey the clock line. Token rules: scout for exploration, no re-reads, tail logs, test only the riskiest function. The team section only applies once `.hackathon/state/` exists.
+Loaded every turn, so it's short. Three rule sets:
+- **Demo-first (default):** build only the demo path, vertical slice first, fake what judges can't see and mark it `FAKE:`, tests only for the one risky function.
+- **When DEMO-FIRST is OFF:** complete features in milestone order, no new `FAKE:` stubs (replace ones you touch), handle errors and edge cases, test the logic you add.
+- **Always:** boring hosted stack, check docs via context7, deploy early, small commits, push to main only when it runs, obey the clock line.
+
+Plus token rules (scout for exploration, no re-reads, tail logs), the team protocol, and the autonomous/solo rules.
+
+### Demo-first toggle (`hk.sh demo-first`)
+| Command | Effect |
+|---|---|
+| `hk.sh demo-first off` | Team-wide: logged as `DEMO-FIRST OFF`, delivered to every agent mid-task; their sessions start with "DEMO-FIRST OFF: build features properly" |
+| `hk.sh demo-first on` | Back to demo-first for everyone |
+| `hk.sh demo-first off --me` / `on --me` / `clear --me` | Override for your clone only / back to the team setting |
+| `hk.sh demo-first status` | Team setting, your override, what your agent follows |
+
+Use it when the event rewards code quality (judged repos, longer builds), or after the demo works and you want to harden what's there. `/slice` follows whichever is active. The clock's polish and freeze phases apply either way.
 
 ### Clock hook (`clock.sh`)
 At session start (and after `/clear` or `/compact`) it prints the time left. On each prompt it prints only in the last 4 hours:
@@ -272,7 +287,7 @@ For the end of the event, when one agent should do the remaining small fixes alo
 
 ## 8. What was tested
 
-- `tests/run.sh`: 207 checks against throwaway repos and a local bare remote. Everything from v2 (install/merge, claims and races, offline handling, row merges, WIP isolation, pre-push, Python check, clock) plus, for v3: dependency routing (DONE is urgent only for the dependent task's owner); `posttool` JSON validity, speed and subagent skip; ASK/NOTE/ANSWER mentions; the loop guard logging ESCALATE and never waking; the watcher waking (exit 2) on an urgent event, staying quiet otherwise, replacing an older watcher, and respecting the wake cap with the event still delivered at the next prompt; the collision guard (CLAIM-FILE, owned directory, own directory, refuse-once then retry, `HK_COLLISION=warn`); contract alerts on push to main; post-commit activity beats, STALE display and `--take`; Discord posts to a local fake webhook that behaves like a forum or a text channel (one post per project shared by the team, sender names, machine-wide URL, project `off` overriding it, text-channel fallback remembered, mentions disabled, non-Discord URLs refused); upgrading a v2 board in place; `clock.sh --minutes`; autonomous mode (permit JSON, AskUserQuestion refusal, Stop-hook next steps through a whole board, work-ran-out stop, DEMO RED, no-URL stop, STUCK after 3, per-person override, time budget, AUTO ON/OFF reaching everyone, ESCALATE to an autonomous asker); solo mode (solo agent autonomous and unrestricted, others muted but still able to work, human notes still delivered, takeover of any task, SOLO OFF); claims no longer hiding teammates' news.
+- `tests/run.sh`: 222 checks against throwaway repos and a local bare remote. Everything from v2 (install/merge, claims and races, offline handling, row merges, WIP isolation, pre-push, Python check, clock) plus, for v3: dependency routing (DONE is urgent only for the dependent task's owner); `posttool` JSON validity, speed and subagent skip; ASK/NOTE/ANSWER mentions; the loop guard logging ESCALATE and never waking; the watcher waking (exit 2) on an urgent event, staying quiet otherwise, replacing an older watcher, and respecting the wake cap with the event still delivered at the next prompt; the collision guard (CLAIM-FILE, owned directory, own directory, refuse-once then retry, `HK_COLLISION=warn`); contract alerts on push to main; post-commit activity beats, STALE display and `--take`; Discord posts to a local fake webhook that behaves like a forum or a text channel (one post per project shared by the team, sender names, machine-wide URL, project `off` overriding it, text-channel fallback remembered, mentions disabled, non-Discord URLs refused); upgrading a v2 board in place; `clock.sh --minutes`; autonomous mode (permit JSON, AskUserQuestion refusal, Stop-hook next steps through a whole board, work-ran-out stop, DEMO RED, no-URL stop, STUCK after 3, per-person override, time budget, AUTO ON/OFF reaching everyone, ESCALATE to an autonomous asker); solo mode (solo agent autonomous and unrestricted, others muted but still able to work, human notes still delivered, takeover of any task, SOLO OFF); claims no longer hiding teammates' news.
 - A live interactive Claude Code 2.1.325 session (Haiku) in tmux on a sandbox with two teammates: a teammate's NOTE arrived mid-task via `PostToolUse`; an idle agent was woken by a dependency's DONE and replied in one line; the collision guard refused an edit in a teammate's directory before writing; a woken agent answered an ASK with one `ANSWER` line in manual mode, was blocked by the classifier in auto mode (and told its human instead); a follow-up ASK became `ESCALATE` without waking anyone. Two bugs found this way were fixed (agents didn't know their own handle; `PreToolUse` warnings arrived after the edit).
 - shellcheck clean (warning level). Linux only for v3; the v2 parts also passed on macOS.
 - Not tested: macOS and Windows for the v3 hooks, a real Discord server (a local fake webhook was used), the github/vercel MCP sign-in, and a full `/kickoff` -> `/ship` run on a real project.
@@ -281,6 +296,7 @@ For the end of the event, when one agent should do the remaining small fixes alo
 
 ## 9. Changes from v2
 
+- Demo-first toggle (`hk.sh demo-first on|off [--me]`): CLAUDE.md split into demo-first / when-off / always rules.
 - Autonomous mode (`hk.sh auto`) and solo mode (`hk.sh solo`): self-approved prompts, no questions, Stop-hook continuation until work runs out, budgets, STUCK detection, kill switch, muting.
 - Event routing: urgent vs FYI per person, using a new board `deps` column (`add --after`).
 - Mid-task delivery (`PostToolUse`), idle wake-ups (`asyncRewake` watcher on `Stop`/`SessionStart`), and urgent-first next-prompt delivery; each event delivered once.

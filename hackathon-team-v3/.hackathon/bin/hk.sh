@@ -21,6 +21,8 @@
 #                                    autonomous mode: agents approve their own prompts (deny list still
 #                                    applies), never wait for a human, keep going until work runs out
 #   solo @name [2h] | off            one agent finishes alone (autonomous); everyone else is muted
+#   demo-first on|off [--me] | clear --me | status
+#                                    off = build features properly (no FAKE stubs, tests, edge cases)
 # Hooks: peek, posttool, pretool, watch (exit 2 = wake the agent), permit, autostop, contract,
 #        _beat, _bgfetch, _mergeboard
 #
@@ -170,8 +172,11 @@ eff_auto(){ # "on <until-epoch|0>" or "off <why>" for MY agent
   u=${u:-0}; [ "$u" != 0 ] && [ "$t" -ge "$u" ] && { echo "off budget"; return; }
   echo "on $u"; }
 auto_on(){ [ "$(eff_auto | cut -d' ' -f1)" = on ]; }
+eff_demo(){ local l; l=$(cat "$H/.demofirst" 2>/dev/null || true)
+  [ -n "$l" ] || l=$(mode_get demo_first); [ "$l" = off ] && echo off || echo on; }
 mode_line(){ # what the agent is told at session start / in status
   local st solo u; st=$(eff_auto); solo=$(mode_get solo)
+  [ "$(eff_demo)" = off ] && echo "DEMO-FIRST OFF: build features properly. Ignore the demo-first rules in CLAUDE.md; follow its \"When DEMO-FIRST is OFF\" section."
   if [ -n "$solo" ] && [ "$solo" != - ]; then
     if [ "$solo" = "@$ME" ]; then echo "SOLO MODE: you (@$ME) finish alone. You may edit any file, change contracts and take any task; nobody else is working."
     else echo "SOLO MODE: $solo is finishing alone; team notifications are muted for you. Work only if your human asks, and keep out of files $solo is changing."; fi
@@ -251,7 +256,7 @@ route(){ # tag each new line: "U " urgent for me, "E " escalate (2nd round trip)
     {
       line = $0; c = "F"
       k = split(line, w, " "); actor = w[2]; verb = w[3]; arg = w[4]; a2 = arg; sub(/:$/, "", a2)
-      if (line !~ /^\|/ && (verb == "AUTO" || verb == "SOLO")) { print "U " line; next }   # mode changes reach everyone
+      if (line !~ /^\|/ && (verb == "AUTO" || verb == "SOLO" || verb == "DEMO-FIRST")) { print "U " line; next }   # mode changes reach everyone
       if (solo != "-" && solo != me) { print "M " line; next }                              # muted: someone else is solo
       if (line ~ /^\|/) { print "F " line; next }
       if (solo == me) { print ((verb == "NOTE" && a2 == me) ? "U " : "F ") line; next }     # solo: only human notes are urgent
@@ -489,7 +494,7 @@ _post) # Discord webhook post (background). Mentions are disabled so nobody gets
     { e = "•"; if ($3 == "DONE") e = "✅"; else if ($3 == "BLOCKED") e = "⛔"; else if ($3 == "ASK") e = "❓";
       else if ($3 == "ANSWER") e = "💬"; else if ($3 == "ESCALATE") e = "🚨"; else if ($3 == "CLAIMED" || $3 == "TOOK-OVER") e = "🙋";
       else if ($3 == "NOTE") e = "📝"; else if ($3 == "CONTRACT-CHANGED") e = "📜"; else if ($3 == "DEMO") e = ($4 == "RED") ? "🔴" : "🟢";
-      else if ($3 == "AUTO") e = "🤖"; else if ($3 == "SOLO") e = "🎯"; else if ($3 == "STUCK") e = "🧱";
+      else if ($3 == "AUTO") e = "🤖"; else if ($3 == "SOLO") e = "🎯"; else if ($3 == "STUCK") e = "🧱"; else if ($3 == "DEMO-FIRST") e = "🧭";
       if (NR <= 15) print e " " substr($0, 1, 300) }')
   who=${ME:-$(gm config user.name 2>/dev/null | tr 'A-Z ' 'a-z-')}
   who=$(printf '%s' "${who:-hk}" | tr -d '@#:`' | sed 's/[Dd][Ii][Ss][Cc][Oo][Rr][Dd]//g; s/[Cc][Ll][Yy][Dd][Ee]//g'); [ -n "$who" ] || who=hk
@@ -666,6 +671,20 @@ auto)
       st=$(eff_auto); echo "you (@$ME): autonomous ${st%% *} (${st#* })"
       mode_line ;;
     *) die "usage: hk.sh auto on [90m|2h] [--me] | off [--me] | clear --me | status" ;;
+  esac ;;
+
+demo-first)
+  sub=${1:-status}; [ "${2:-}" = --me ] && me=1 || me=0
+  case $sub in
+    on|off) need
+      if [ $me = 1 ]; then echo "$sub" > "$H/.demofirst"; echo "DEMO-FIRST ${sub} for @$ME (this clone only, whatever the team setting)."
+      elif [ "$sub" = off ]; then mode_publish "demo_first=off" "DEMO-FIRST OFF (by @$ME): build features properly - no new FAKE stubs, handle errors and edge cases, test the logic you add"
+      else mode_publish "demo_first=on" "DEMO-FIRST ON (by @$ME): back to demo path only, vertical slices, fake what judges can't see"; fi ;;
+    clear) need; rm -f "$H/.demofirst"; echo "@$ME follows the team's demo-first setting again." ;;
+    status) need; t=$(mode_get demo_first); echo "team: demo-first ${t:-on}"
+      [ -f "$H/.demofirst" ] && echo "this clone overrides: $(cat "$H/.demofirst")"
+      echo "you (@$ME): demo-first $(eff_demo)" ;;
+    *) die "usage: hk.sh demo-first on|off [--me] | clear --me | status" ;;
   esac ;;
 
 solo)

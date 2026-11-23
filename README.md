@@ -9,7 +9,7 @@ Claude Code harnesses: drop-in project configs (rules, hooks, agents, slash comm
 A Claude Code setup for hackathon teams of 2-4 people, each running their own agent. It keeps agents on the demo path, watches the clock, and coordinates the team through git, so agents share **events, not conversation**.
 
 **What it does**
-- **Demo-first rules:** build only the demo path, vertical slice first, fake what judges can't see (tagged `FAKE:` so the pitch stays honest), deploy early.
+- **Demo-first rules, toggleable:** by default agents build only the demo path, vertical slice first, faking what judges can't see (tagged `FAKE:` so the pitch stays honest). `hk.sh demo-first off` switches the whole team to build-it-properly rules (complete features, no fakes, error handling, tests) and back.
 - **Smarter kickoff:** `/kickoff` generates 5 ideas, drops ones that already exist, scores the rest on originality, real-world problem, sponsor tech and demo-to-effort, then scaffolds, deploys and splits the work into board tasks with dependencies.
 - **Deadline clock:** time left is injected into context; under 4h the agent polishes, under 1h it freezes features.
 - **Team board on its own git branch:** claim tasks (the remote is the lock, so simultaneous claims have exactly one winner), log events, record decisions. It never pushes, pulls or rebases your code, and it works offline (queued, pushed later).
@@ -21,7 +21,7 @@ A Claude Code setup for hackathon teams of 2-4 people, each running their own ag
 - **Demo health:** `/demo-check` walks the demo path in a real browser after deploys and logs `DEMO GREEN` / `DEMO RED` for the team; the `judge` agent scores the demo against the judging criteria before submission.
 - **Token-lean by design:** ponytail (minimal code), a Haiku `scout` for lookups, terse rules, zero tokens when nothing changed, read-deny rules for `node_modules`, build output, lockfiles and `.env` files.
 - **Safe install:** `install.sh` merges into your repo (`.gitignore`, `.gitattributes`, `CLAUDE.md`, `.mcp.json`, settings) and never overwrites your files; pinned plugin and MCP versions.
-- **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash); 209 end-to-end tests run in CI on all three, and the event, autonomous and solo features were verified in live Claude Code sessions.
+- **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash); 222 end-to-end tests run in CI on all three, and the event, autonomous and solo features were verified in live Claude Code sessions.
 
 **Set up in one paste**
 

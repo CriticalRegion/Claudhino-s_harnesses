@@ -17,7 +17,7 @@ Team: `/sync`, `/claim <id>`, `/handoff <id> <path:line>`. Events arrive by them
 | Piece | Purpose | Token effect |
 |---|---|---|
 | ponytail plugin (pinned v5.3.3) | Minimal code, reuse over build | Independent test (JetBrains): ~15% less code, ~10% lower cost; maker claims more |
-| CLAUDE.md | Demo-first rules, fake-it policy, how to react to events | Short, always loaded |
+| CLAUDE.md | Demo-first rules (toggleable to build-it-properly), how to react to events | Short, always loaded |
 | `scout` (Haiku) / `judge` (Sonnet) | Repo/doc lookups; pre-submission critique in a real browser | Cheap model; one focused pass |
 | context7 / playwright MCP (pinned) | Current library docs; verify the demo path | Fewer hallucinated-API loops, catches broken demos |
 | github / vercel MCP | Commit, deploy, URL from chat | Fewer shell round-trips |
@@ -46,6 +46,7 @@ Team: `/sync`, `/claim <id>`, `/handoff <id> <path:line>`. Events arrive by them
 | `hk.sh discord <url> [--global]` / `off` / `test` / `status` | Post your events to Discord (`--global`: every project on this machine) |
 | `hk.sh auto on [2h] [--me]` / `off` / `status` | Autonomous mode for the team (or just you) |
 | `hk.sh solo @name [2h]` / `solo off` | One agent finishes alone; others muted |
+| `hk.sh demo-first off` / `on` [`--me`] | Switch the team between demo-first and build-it-properly rules |
 
 ## Test it
-`bash hackathon-team-v3/tests/run.sh` - 207 end-to-end checks against throwaway repos: everything from v2 plus routing, delivery, wake-ups, guards, Discord via a local fake webhook, v2-board upgrade, CRLF and Windows-path handling, autonomous and solo mode. GitHub Actions runs them on Linux, macOS (stock bash 3.2 + BSD awk) and Windows (Git Bash, CRLF checkout) on every push and PR. Wake-ups, mid-task delivery, the collision guard, the loop guard, autonomous mode, solo mode and the kill switch were also verified in live interactive Claude Code sessions on Linux.
+`bash hackathon-team-v3/tests/run.sh` - 222 end-to-end checks against throwaway repos: everything from v2 plus routing, delivery, wake-ups, guards, Discord via a local fake webhook, v2-board upgrade, CRLF and Windows-path handling, autonomous and solo mode. GitHub Actions runs them on Linux, macOS (stock bash 3.2 + BSD awk) and Windows (Git Bash, CRLF checkout) on every push and PR. Wake-ups, mid-task delivery, the collision guard, the loop guard, autonomous mode, solo mode and the kill switch were also verified in live interactive Claude Code sessions on Linux.
