@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Runs bin/hh.js for a hook, staying silent when Node.js isn't installed (the session-start note says so).
+command -v node >/dev/null 2>&1 || exit 0
+exec node "$(dirname "$0")/hh.js" "$@"

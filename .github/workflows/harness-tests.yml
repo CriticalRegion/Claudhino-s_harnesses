@@ -14,7 +14,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     defaults:
       run:
         shell: bash
@@ -43,5 +43,8 @@ jobs:
           timeout --version 2>/dev/null | head -n1 || echo "no coreutils timeout"
           command -v nohup cygpath curl || true
 
-      - name: hackathon-team-v3 end-to-end tests
+      - name: hackathon-team-v4 (plugin) end-to-end tests
+        run: bash hackathon-team-v4/tests/run.sh
+
+      - name: hackathon-team-v3 (legacy) end-to-end tests
         run: bash hackathon-team-v3/tests/run.sh

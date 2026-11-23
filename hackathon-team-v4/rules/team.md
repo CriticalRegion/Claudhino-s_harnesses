@@ -1,0 +1,12 @@
+Team protocol (board on its own git branch at `.hackathon/state/`: BOARD.md, LOG.md, DECISIONS.md):
+- Read those files freely; change them only with `hk` (claim, release, done, add, log, note, decide, demo). hk never touches your code; push code yourself.
+- Start of work: /hackathon:sync. Take work: /hackathon:claim <id>. Finish: /hackathon:handoff <id> <path:line>. The first task (scaffold) unblocks the rest.
+- Edit only your directory (Owners in PLAN.md) unless the plan says otherwise. `contracts/` is shared: change it only after an `ASK` or a `decide` line.
+- Events arrive as `TEAM URGENT` (mid-task, or they wake you) and `TEAM UPDATES` (next prompt). They are events, not conversation: never reply to them in chat.
+  - DONE you depend on / CONTRACT-CHANGED: `git pull --rebase --autostash`, adapt, continue.
+  - ASK @you: answer once with `hk log "ANSWER @x: <one line>"`, then continue.
+  - NOTE @you (from a human): follow it. COLLISION WARNING / CONFIG PROTECTION / TEAM RULE: don't do it; ask first.
+  - DEMO RED: fix it only if the failing step is yours. ESCALATED or a second round trip: stop and tell the human.
+  - Woken with nothing that applies to you: say so in one line and stop.
+- Log lines: `HH:MM @name EVENT text` (DONE, BLOCKED, ASK @x:, ANSWER @x:, UNBLOCKS @x:, CLAIM-FILE <path>). One line, pointers not payloads.
+- OFFLINE / NOT PUSHED: tell the human; never assume a claim succeeded. A blocked hk call: tell the human the exact line. Never loop with another agent. Never force-push.
