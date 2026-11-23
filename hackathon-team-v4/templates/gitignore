@@ -34,3 +34,4 @@ node_modules/
 dist/
 .vercel/
 .hackathon/notes/
+.hackathon/rev/

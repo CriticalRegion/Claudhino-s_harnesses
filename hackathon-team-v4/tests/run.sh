@@ -9,6 +9,7 @@ cleanup(){ [ -n "$SRV" ] && kill "$SRV" 2>/dev/null; for f in "$T"/*/.hackathon/
   sleep 0.5; rm -rf "$T" 2>/dev/null || { sleep 2; rm -rf "$T"; }; }
 trap cleanup EXIT
 case $(uname -s) in MINGW*|MSYS*|CYGWIN*) WIN=1;; *) WIN=;; esac   # Git Bash on Windows: slower process start
+HHJS=$HARN/bin/hh.js; [ -n "$WIN" ] && HHJS=$(cygpath -m "$HHJS")   # a native path: checks below switch off Git Bash's path rewriting
 PY=; for c in python3 python; do "$c" -c 'import sys' >/dev/null 2>&1 && { PY=$c; break; }; done
 echo "# platform: $(uname -s), bash $BASH_VERSION, $(awk --version 2>/dev/null | head -n1 | cut -c1-40)${WIN:+ (Windows)}" 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
@@ -500,7 +501,7 @@ has "gitignore covers monitor state" "$(cat "$T/seed/.gitignore")" ".hackathon/.
 export HK_GUARD=on HK_STOP_CHECK=on   # v4 defaults them off (sprint profile); hybrid's tests exercise them switched on
 git clone -q "$T/remote.git" "$T/h1"; git clone -q "$T/remote.git" "$T/h2"
 hk h1 init hana >/dev/null; hk h2 init hugo >/dev/null
-hh(){ (cd "$T/$1" && shift && MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' node "$HARN/bin/hh.js" "$@" 2>&1); }   # Git Bash would rewrite /bin/rm in arguments
+hh(){ (cd "$T/$1" && shift && MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' node "$HHJS" "$@" 2>&1); }   # Git Bash would rewrite /bin/rm in arguments
 hj(){ (cd "$T/$1" && printf '%s' "$3" | node "$HARN/bin/hh.js" "$2" 2>&1); }
 dec(){ hh h1 check "$1" | cut -f1; }
 echo "# hybrid: guard - attacks from the v3.1 stress test are gated"
@@ -793,5 +794,137 @@ if command -v claude >/dev/null 2>&1 && [ -z "${CI:-}" ]; then
   echo "# v4: claude plugin validate"
   has "plugin validates" "$(claude plugin validate "$HARN" 2>&1 | tail -n1)" "Validation passed"
 fi
+
+
+echo "# v4.1: night shift (agents build, critique each other and merge while the team is away)"
+git init -q --bare "$T/night.git"; git -C "$T/seed" push -q "$T/night.git" main
+for n in n1 n2 n3; do git clone -q "$T/night.git" "$T/$n"; done
+hk n1 init nia >/dev/null; hk n2 init nob >/dev/null; hk n3 init ned >/dev/null
+rs(){ git -C "$T/night.git" show "hackathon-state:$1" 2>/dev/null; }
+nf(){ printf '%s\n' '# Night' '## Goal' 'Build v5: scores API and leaderboard.' '## Done when' '- [ ] npm test passes' '- [ ] the leaderboard shows saved scores' \
+  '## Out of scope' 'auth' '## Tasks' '- api: scores API (api/)' '- web: leaderboard page (web/) [after api]' > "$1"; }
+rvw(){ rs REVIEWS.md | awk -F'|' -v id="$1" '{k=$2; gsub(/ /,"",k)} k==id {r=$4; gsub(/ /,"",r); print r}'; }
+clone_of(){ case $1 in @nia) echo n1;; @nob) echo n2;; @ned) echo n3;; esac; }
+eq "start needs a plan" "$(hkrc n1 night start)" 1
+printf '## Goal\nx\n## Tasks\n- a: b\n' > "$T/n1/.hackathon/NIGHT.md"; has "the plan needs a Done-when list" "$(hk n1 night start)" "Done when"
+nf "$T/n1/.hackathon/NIGHT.md"
+has "an agent's shell can't start it" "$(cd "$T/n1" && CLAUDECODE=1 bash .hackathon/bin/hk night start 2>&1)" "human"
+has "settings: humans confirm night start" "$(node -p 'require(process.argv[1]).permissions.ask.join(" ")' "$HARN/templates/settings.json")" "Bash(hk night start*)"
+hk n2 log "UNBLOCKS @nia: leaving my agent on tonight" >/dev/null; hk n3 log "UNBLOCKS @nia: mine too" >/dev/null
+o=$(hk n1 night start --until 8h --budget 50); has "night starts" "$o" "NIGHT ON until"; has "says who's active" "$o" "@nob"
+has "says the guard is on for the shift" "$o" "safety guard on"
+has "guard and stop check on for the shift" "$(rs MODE.md)" "| guard | on |"
+eq "the guard refuses night start" "$(cd "$T/n1" && MSYS_NO_PATHCONV=1 node "$HHJS" check 'hk night start --until 07:00' | cut -f1)" deny
+eq "the guard lets agents stop it" "$(cd "$T/n1" && node "$HARN/bin/hh.js" check 'hk night stop' | cut -f1)" allow
+has "plan published to the board branch" "$(rs NIGHT.md)" "## Done when"
+has "tasks on the board" "$(rs BOARD.md)" "| api |"
+has "[after] becomes a dependency" "$(rs BOARD.md | grep '| web |')" "| api |"
+has "autonomous on for the shift" "$(rs MODE.md)" "| auto | on |"
+eq "a second start is refused" "$(hkrc n1 night start)" 1
+hk n2 sync >/dev/null; hk n3 sync >/dev/null
+t0=$(date +%s); (cd "$T/n2" && bash .hackathon/bin/hk session-start </dev/null >/dev/null 2>&1)
+waitfor 'rs SEEN.md | awk -F"|" -v t='"$t0"' "\$2 ~ /@nob/ && \$3+0 >= t {f=1} END{exit !f}"' 60 && ok "a session starting during the shift marks the agent present" || no "presence at session start" "$(rs SEEN.md)"
+has "night rules injected" "$(hk n2 rules)" "Night shift"
+has "mode line" "$(hk n2 auto status)" "NIGHT SHIFT until"
+has "statusline shows the shift" "$(cd "$T/n2" && printf '{}' | HH_ROOT="$T/n2" node "$HARN/bin/hh.js" statusline)" "NIGHT→"
+has "next step: claim" "$(hk n2 night status)" "Claim the next task: hk claim api"
+hk n1 claim api >/dev/null
+has "builder: build on a branch" "$(hk n1 night status)" "Finish api (scores API (api/)) on branch night/api"
+eq "done before review is refused" "$(hkrc n1 done api)" 1
+has "and says why" "$(hk n1 done api)" "NOT REVIEWED"
+has "submit" "$(hk n1 submit api --note 'first cut')" "SUBMITTED api r1 to @"
+rv=$(rvw api); case $rv in @nob|@ned) ok "the reviewer is a teammate's agent ($rv)";; *) no "reviewer is a teammate" "$rv";; esac
+R1=$(clone_of "$rv"); O1=n3; [ "$R1" = n3 ] && O1=n2
+has "board: in review" "$(rs BOARD.md | grep '| api |')" "review"
+has "resubmitting while pending is a no-op" "$(hk n1 submit api)" "ALREADY IN REVIEW"
+hk "$R1" _bgfetch; has "the reviewer is told mid-task" "$(hk "$R1" peek)" "REVIEW $rv: api r1 night/api - first cut"
+has "reviewer: review first" "$(hk "$R1" night status)" "Review api for @nia"
+b=$(hk "$R1" brief api); has "brief: diff command" "$b" "git diff origin/main...origin/night/api"; has "brief: Done when" "$b" "npm test passes"; has "brief: builder's note" "$b" "first cut"
+printf '1. MUST api/scores.ts:4 - no validation - check score is a number\n2. NIT api/scores.ts:9 - name\nChecks: npm test PASS\n' > "$T/$R1/rv.md"
+eq "only the assigned reviewer gives the verdict" "$(hkrc "$O1" verdict api changes "$T/$R1/rv.md")" 1
+eq "approve with a MUST is refused" "$(hkrc "$R1" verdict api approve "$T/$R1/rv.md")" 1
+has "changes" "$(hk "$R1" verdict api changes "$T/$R1/rv.md")" "VERDICT api r1: changes"
+has "findings filed on the board branch" "$(rs reviews/api-r1.md)" "MUST api/scores.ts:4"
+has "verdict logged with counts" "$(rs LOG.md)" "VERDICT @nia: api r1 CHANGES (1 MUST, 0 SHOULD)"
+hk n1 _bgfetch; has "the builder is told" "$(hk n1 peek)" "VERDICT @nia: api r1 CHANGES"
+has "builder: address the review" "$(hk n1 night status)" "Address the review of api"
+has "round 2 goes to the same reviewer" "$(hk n1 submit api --note 'fixed 1')" "SUBMITTED api r2 to $rv"
+has "brief points at the previous review" "$(hk "$R1" brief api)" "reviews/api-r1.md"
+printf '1. SHOULD api/scores.ts:9 - rename\nChecks: npm test PASS\n' > "$T/$R1/rv.md"
+hk "$R1" verdict api approve "$T/$R1/rv.md" >/dev/null
+has "approved" "$(rs REVIEWS.md | grep '| api |')" "approved"
+has "builder: merge" "$(hk n1 night status)" "Merge api"
+has "done after approval" "$(hk n1 done api api/scores.ts:1)" "DONE api"
+hasnt "no goal check while tasks are open" "$(rs BOARD.md)" "goal-"
+echo "# v4.1: night shift - the critique always ends"
+hk n1 config set review_rounds=1 >/dev/null
+hk "$O1" claim web >/dev/null; hk "$O1" submit web >/dev/null; R2=$(clone_of "$(rvw web)")
+printf '1. MUST web/page.tsx:3 - no empty state - render "no scores yet"\n' > "$T/$R2/rv2.md"
+has "at the round limit, changes become accepted" "$(hk "$R2" verdict web changes "$T/$R2/rv2.md")" "accepted"
+has "what's left becomes a follow-up task" "$(rs BOARD.md)" "| web-fix |"
+has "logged" "$(rs LOG.md)" "ACCEPTED at the round limit"
+hk "$O1" done web >/dev/null
+hasnt "follow-up open: no goal check yet" "$(rs BOARD.md)" "goal-"
+hk "$O1" claim web-fix >/dev/null; hk "$O1" submit web-fix >/dev/null; R3=$(clone_of "$(rvw web-fix)")
+hk "$R3" verdict web-fix changes "$T/$R2/rv2.md" >/dev/null 2>&1 || cp "$T/$R2/rv2.md" "$T/$R3/rv2.md"; hk "$R3" verdict web-fix changes "$T/$R3/rv2.md" >/dev/null 2>&1
+hasnt "a follow-up gets no follow-up of its own" "$(rs BOARD.md)" "web-fix-fix"
+has "last task done" "$(hk "$O1" done web-fix)" "DONE web-fix"
+has "the empty board gets a goal check" "$(rs BOARD.md)" "| goal-1 |"
+has "announced" "$(rs LOG.md)" "GOAL CHECK 1 due"
+hk n1 _bgfetch; has "it wakes idle agents" "$(hk n1 peek)" "GOAL CHECK 1 due"
+hk n1 config set review_rounds=3 >/dev/null
+echo "# v4.1: night shift - goal checks"
+has "next: claim the goal check" "$(hk n2 night status)" "Claim the goal check: hk claim goal-1"
+hk n2 claim goal-1 >/dev/null
+has "next: run it" "$(hk n2 night status)" "Run the goal check goal-1"
+eq "hk done can't close a goal check" "$(hkrc n2 done goal-1)" 1
+printf -- '- PASS npm test passes - 12 tests\n- FAIL the leaderboard shows saved scores - empty after reload\n' > "$T/n2/gc.md"
+eq "met with a FAIL is refused" "$(hkrc n2 goal met "$T/n2/gc.md")" 1
+eq "gaps needs new tasks" "$(hkrc n2 goal gaps "$T/n2/gc.md")" 1
+printf -- '\n## New tasks\n- persist: save scores to sqlite (api/db.ts)\n' >> "$T/n2/gc.md"
+has "gaps" "$(hk n2 goal gaps "$T/n2/gc.md")" "GOAL CHECK 1: gaps"
+has "gap task on the board" "$(rs BOARD.md)" "| persist |"
+has "goal check kept" "$(rs goal-1.md)" "FAIL the leaderboard"
+hk n3 _bgfetch; has "gaps wake the others" "$(hk n3 peek)" "GOAL GAPS"
+hk n3 claim persist >/dev/null; hk n3 submit persist >/dev/null; R4=$(clone_of "$(rvw persist)")
+printf 'Checks: npm test PASS\n' > "$T/$R4/ok.md"; hk "$R4" verdict persist approve "$T/$R4/ok.md" >/dev/null
+hk n3 done persist >/dev/null
+has "second goal check (free id)" "$(rs BOARD.md)" "| goal-2 |"
+hk n1 claim goal-2 >/dev/null
+printf -- '- PASS npm test passes - 14 tests\n- PASS the leaderboard shows saved scores - 3 rows after reload\n' > "$T/n1/gc2.md"
+has "goal met" "$(hk n1 goal met "$T/n1/gc2.md")" "GOAL CHECK 2: met"
+has "the shift ends" "$(rs MODE.md)" "| night | off |"
+has "autonomous mode ends with it" "$(rs MODE.md)" "| auto | off |"
+m=$(rs MORNING.md)
+has "report: goal" "$m" "Build v5"; has "report: why it ended" "$m" "Ended:** goal met"
+has "report: Done-when results" "$m" "PASS the leaderboard shows saved scores"
+has "report: tasks with review rounds" "$m" "| api | @nia | done | 2 | approved |"
+has "report: critique stats" "$m" "review verdict(s)"
+has "report: needs-a-human section" "$m" "## Needs a human"
+has "hk night report" "$(hk n2 night report)" "# Night shift report"
+has "status after" "$(hk n2 night status)" "night shift: off"
+echo "# v4.1: night shift - ends on time, on budget, and alone"
+printf '%s\n' '## Goal' 'Polish.' '## Done when' '- [ ] it builds' '## Tasks' '- t1: polish (web/)' > "$T/n1/p2.md"
+hk n1 night start --until 2s --plan "$T/n1/p2.md" >/dev/null; sleep 3
+(cd "$T/n1" && printf '{}' | bash .hackathon/bin/hk autostop >/dev/null 2>&1)
+waitfor 'rs MODE.md | grep -q "| night | off |"' 60 && ok "time limit ends the shift" || no "time limit ends the shift" "$(rs MODE.md)"
+has "report says why" "$(rs MORNING.md)" "time is up"
+hasnt "report covers tonight's tasks only" "$(rs MORNING.md)" "| api |"
+printf '%s\n' '## Goal' 'More.' '## Done when' '- [ ] it builds' '## Tasks' '- t2: more (web/)' > "$T/n1/p3.md"
+hk n1 night start --until 8h --budget 1 --plan "$T/n1/p3.md" >/dev/null
+mkdir -p "$T/n2/.hackathon/.hh"; printf '2.50' > "$T/n2/.hackathon/.hh/cost-total"; hk n2 log "IDEA dark mode" >/dev/null
+hk n1 sync >/dev/null; (cd "$T/n1" && printf '{}' | bash .hackathon/bin/hk autostop >/dev/null 2>&1)
+waitfor 'rs MODE.md | grep -q "| night | off |"' 60 && ok "budget ends the shift" || no "budget ends the shift" "$(rs MODE.md)"
+has "report: budget reason" "$(rs MORNING.md)" "budget reached"
+has "report: ideas for the humans" "$(rs MORNING.md)" "IDEA dark mode"
+printf '%s\n' '## Goal' 'Solo.' '## Done when' '- [ ] it builds' '## Tasks' '- t3: alone (web/)' > "$T/n1/p4.md"
+hk n1 night start --until 8h --plan "$T/n1/p4.md" >/dev/null; hk n1 claim t3 >/dev/null
+o=$(cd "$T/n1" && HK_STALE_MIN=0 bash .hackathon/bin/hk submit t3 2>&1); has "alone: review with a fresh critic" "$o" "fresh critic"
+has "next: review your own task" "$(hk n1 night status)" "Review your own task t3"
+printf 'Checks: build PASS\n' > "$T/n1/ok.md"; hk n1 verdict t3 approve "$T/n1/ok.md" >/dev/null
+has "self-reviewed work can be merged" "$(hk n1 done t3)" "DONE t3"
+has "an agent may stop the shift" "$(hk n2 night stop)" "NIGHT OFF (stopped by @nob)"
+has "nobody's left in night mode" "$(rs MODE.md)" "| night | off |"
+hasnt "the team's guard setting is back" "$(rs MODE.md)" "| guard | on |"
 
 echo; echo "passed $pass, failed $fail"; [ $fail = 0 ]

@@ -38,6 +38,7 @@
       "Bash(git restore *)",
       "Bash(git branch -D *)",
       "Bash(hk auto on*)",
+      "Bash(hk night start*)",
       "Bash(hk solo @*)",
       "Bash(hk config set*)",
       "Bash(hk config profile*)",
