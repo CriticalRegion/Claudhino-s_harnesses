@@ -237,11 +237,12 @@ function unwrap(argv) {
 }
 
 // ---------- path classes ----------
-const REAL_ROOT = (() => { try { return fs.realpathSync(ROOT); } catch { return ROOT; } })();
+const realp = p => (fs.realpathSync.native || fs.realpathSync)(p);   // native: also expands Windows 8.3 names (RUNNER~1)
+const REAL_ROOT = (() => { try { return realp(ROOT); } catch { return ROOT; } })();
 function realish(abs) {   // realpath of the longest existing prefix (macOS: /var -> /private/var)
   const tail = []; let p = abs;
   for (let k = 0; k < 64; k++) {
-    try { return path.join(fs.realpathSync(p), ...tail.reverse()); }
+    try { return path.join(realp(p), ...tail.reverse()); }
     catch { const d = path.dirname(p); if (d === p) return abs; tail.push(path.basename(p)); p = d; }
   }
   return abs;
