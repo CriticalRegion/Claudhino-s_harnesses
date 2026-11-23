@@ -16,9 +16,10 @@ A Claude Code plugin for hackathon teams of 1-4 people, each running their own a
 - **Team board on its own git branch**: claims with one winner, dependencies, offline queueing; it never touches your code.
 - **Live events**: a teammate's `DONE` on a task you depend on, an `ASK` to you, or a contract change reaches your agent **mid-task** or **wakes it when idle**, as one line. Loop guard, collision guard, stale-claim takeover, contract alerts.
 - **Autonomous mode** and **solo mode** (humans switch them on; a kill switch that works offline); a **`deep`** agent hands hard problems to Opus.
+- **Night shift** (4.1): give the team's agents a goal and a Done-when checklist (`/hackathon:night`), start it before you sleep (`hk night start --until 07:00 --budget 30`), and they build on branches, **critique each other's work** (a fresh `critic` agent, numbered MUST/SHOULD findings, capped rounds), merge only what's approved, and run strict goal checks until the checklist passes, time or money runs out, or they've tried enough. A deterministic morning report (`hk night report`) says what got done, what's merged and what needs you.
 - **Guard, monitor, stop check, handoff across `/compact`, status line, security scan**, from the team's hybrid-v1, each a setting (guard and stop check on in the careful profile).
 - **Discord feed** (one forum post per hackathon, under each person's name), **usage log** by model and per teammate, **research** before and **postmortem lessons** after every event.
-- **Runs on** Linux, macOS and Windows (Git Bash). 583 end-to-end tests in CI on all three; setup, kickoff, pause/resume and a plugin-less session checked live in Claude Code.
+- **Runs on** Linux, macOS and Windows (Git Bash). 625 end-to-end tests in CI on all three; setup, kickoff, pause/resume and a plugin-less session checked live in Claude Code.
 
 **Install once per machine**, in Claude Code:
 ```
