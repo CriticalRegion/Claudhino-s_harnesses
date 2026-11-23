@@ -64,7 +64,7 @@ All team settings live on the board (`MODE.md`), so every teammate's agent follo
 
 | Setting | sprint (default) | crunch | careful | What it does |
 |---|---|---|---|---|
-| lean | on | on | off | Build-stage usage savings (section 7b): lean rules, task cards, smoke checks instead of Playwright per slice, a fresh context per task, the flail guard, the code map, and a few Claude Code settings in your `.claude/settings.local.json` |
+| lean | on | on | off | Build-stage usage savings (section 7b): lean rules, task cards, smoke checks instead of Playwright per slice, size-aware /clear advice, the flail guard, the code map, and a few Claude Code settings in your `.claude/settings.local.json` |
 | ideation | on | on | on | `/hackathon:kickoff` generates and scores ideas; `off` = you bring your own idea and kickoff only plans it |
 | demo_first | on | on | off | Demo-first rules vs build-it-properly |
 | collision | refuse | warn | refuse | Editing a teammate's claimed/owned file: refuse once / warn / off |
@@ -98,12 +98,23 @@ At session start and after `/compact`, the plugin injects: core (goal, research 
 
 ## 7b. Lean: usage across the build (`hk config set lean=on|off`)
 The harness's own overhead is small (about 4-5k tokens a session); usage goes on what agents do while building. Lean targets that, keeping quality:
-- **Fresh context per task**: every turn re-reads the whole conversation, so a task started near the ~35k baseline costs a fraction of one started at 150k. At the end of `/hackathon:handoff` the agent writes the checkpoint note and says "Safe to /clear now"; after `/clear` the rules, clock, team news and the note come back. In autonomous mode the main agent stays a thin loop and gives each claimed task to the `builder` agent.
+- **A fresh context only when it pays**: every turn re-reads the whole conversation, but re-orienting after a `/clear` costs about 25k tokens and ~10 turns, so on small sessions it costs more than it saves (measured: 2x). After `hk done` a hook reads the session's size: under 120k tokens (`HK_CLEAR_AT`) it says `CONTEXT OK` (keep going); above it, `FRESH CONTEXT`: write the checkpoint note and "Safe to /clear now" (the rules, clock, team news and note come back), or in autonomous mode hand the next tasks to the `builder` agent.
+- **Dev server by PID**: start it with `... & echo $! > .hackathon/dev.pid`, stop it with `kill`; never `pkill -f` (in every test run agents killed their own shell with it).
 - **Plan once, don't explore**: kickoff names the scaffold command (an official starter) and what gets mocked; board tasks carry a card (`files: ...; done: ...`); `.hackathon/MAP.md` (one line per file with the names it defines, regenerated after every commit at no model cost; `hk map`) replaces exploring.
 - **Cheap checks**: `t0-scaffold` adds a `smoke` script (curl the demo-path routes); slices verify with `check` + `smoke`; Playwright walks the app only in `/hackathon:demo-check`.
 - **No flailing**: the flail guard (a `PostToolUseFailure` hook) sees the same Bash command fail twice and tells the agent to escalate (`build-fixer` / `deep`) instead of a third blind try. Noisy commands go through `set -o pipefail; ... | tail -40`.
 - **Claude Code settings** written to each person's gitignored `.claude/settings.local.json` (only keys you haven't set; removed again when lean is off; effective from the next session): `bashOutputMaxChars: 10000` (longer output is saved to a file with a preview), `MAX_MCP_OUTPUT_TOKENS=8000`, `CLAUDE_CODE_SUBAGENT_MODEL=haiku` (unnamed subagents; named agents keep their model), `effortLevel: high`.
-- **Visible**: `hk claim`/`hk done` record each task's usage on its DONE line (`(usage: out 14k, in 620k)`); `hk cost --tasks` lists them.
+- **Visible**: `hk claim`/`hk done` record each task's usage on its DONE line (`(usage: out 14k, in 620k)`, read live from Claude Code's session logs, subagents included); `hk cost --tasks` lists them.
+
+**Measured** (`tests/ab/run.sh`: the same 4-task Next.js app built headless on Sonnet, then checked independently: `npm run build` plus the 3 demo steps over HTTP):
+
+| Rounds | lean off | lean on | Production build (off / on) | Demo path |
+|---|---|---|---|---|
+| 5 and 6 (same effort, high, in both arms) | 442k, 334k (avg 388k) | 330k, 367k (avg 349k) | FAIL, FAIL / PASS, PASS | 5/5 everywhere |
+| 3 and 4 (off at the account's default effort) | 259k, 269k | 363k, 409k | FAIL, PASS / PASS, PASS | 5/5 everywhere |
+| 2 (lean = a fresh session per task) | 236k | 472k | FAIL / PASS | 5/5 |
+
+Tokens are price-weighted (input 1, cache write 1.25, cache read 0.1, output 5). At equal effort lean was about 10% cheaper on average (the two rounds differ by more than that, so call it a wash on a small app), and its production build passed every time (5 of 5 across all rounds, against 1 of 5 without). `effortLevel: high` is the expensive part: about +45% against the default effort, for better builds. Big sessions (past ~120k tokens, which this app never reached) are where the size-aware `/clear` saves most; that wasn't measured.
 
 ---
 
@@ -181,6 +192,7 @@ Limits: agents are only as good as the plan. Vague Done-when items make a vague 
 | Everything else | v3's table still applies: `hackathon-team-v3/GUIDE.md` section 7 |
 
 ## 14. What was tested
+- **Lean (4.2)**: 54 more checks: the setting and profiles, rules injection, the Claude Code settings merged into and removed from `settings.local.json` (yours kept, teammates follow), the flail guard (second identical failure, success resets, numbers normalised, silent when off or paused), the code map (exports, Python defs, binaries skipped, capped, refreshed after a commit, gitignored), per-task usage read live from transcripts with subagents, the size-aware `/clear` advice after `hk done`, the collision guard inside a subagent. Live: the A/B above, and the autonomous `builder` hand-off after a `FRESH CONTEXT` notice.
 - **Night shift (4.1)**: 87 more checks, simulated with three clones as three teammates: the plan's validation; humans-only start (agent shell, guard, settings); tasks and dependencies from the plan; guard and stop check on for the shift and restored after; night rules and status line; presence at session start; reviewer assignment to an active teammate; `done` refused before approval; review requests and verdicts reaching the right agent mid-task; `approve` refused with a MUST; findings filed; round 2 to the same reviewer; the round limit (accepted + one follow-up, no follow-up of a follow-up); the goal check added when the board empties and waking idle agents; goal gaps adding tasks and waking others; goal met ending the shift; the shift ending on the time limit and on the budget; the morning report (goal, reason, Done-when results, tonight's tasks only, review rounds, ideas for the humans); working alone (self-review through the critic); an agent stopping the shift. Not yet run with real agents overnight.
 - `tests/run.sh`: **538 checks** before 4.1 (v3.1's 255 and hybrid-v1's 150, adapted to the plugin layout, plus v4's: settings and profiles, rules injection and compaction, pause/resume/off including git hooks, clock thresholds, notification toggles, collision modes, config protection, team rules, auto-approve, the `deep` nudge, mode rules travelling with mode changes, the usage log, the guard following settings, v3 migration, the launcher finding the plugin), on Linux; CI runs it on Linux, macOS and Windows. shellcheck clean; `claude plugin validate` passes cleanly (MIT licence).
 - **Live** (Claude Code 2.1.325, plugin loaded with `--plugin-dir`, a fresh project with a local remote): `/hackathon:setup` end to end (project pieces, board, event section, profile with the confirmation prompt, commit; the status line); `/hackathon:kickoff` phase 1 on Opus (web-checked ideas, `judge` scores, top 3, stopped for the pick) and phase 2 (lean plan, `t0-scaffold`, commit); pause (nothing injected, status line says paused) and resume (rules, clock and identity back); a session without the plugin (no rules, no commands). Found and fixed live: setup skipped the profile question (now mandatory), web tools prompted on every search (now allowed).
