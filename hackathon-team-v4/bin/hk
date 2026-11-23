@@ -218,8 +218,17 @@ apply_lean(){ # make this clone's .claude/settings.local.json match the effectiv
   command -v node >/dev/null 2>&1 || return 0
   mkdir -p "$ROOT/.claude" && node "$PLUGIN/templates/merge-json.js" "$ROOT/.claude/settings.local.json" - "lean=$want" >/dev/null 2>&1 \
     && echo "$want" > "$H/.lean-applied"; return 0; }
-cost_sum(){ # this clone's usage so far, all sessions: "<output> <input incl. cache>"
-  cat "$H"/.cost/*.tsv 2>/dev/null | awk -F'\t' '{ o += $5; i += $2 + $3 + $4 } END { printf "%d %d\n", o, i }'; }
+USAGE_AWK='function num(k,   r) { if (match($0, "\"" k "\":[0-9]+")) { r = substr($0, RSTART, RLENGTH); sub(/.*:/, "", r); return r + 0 } return 0 }
+    { m = "?"; if (match($0, /"model":"[^"]*"/)) { m = substr($0, RSTART + 9, RLENGTH - 10) }
+      id = NR; if (match($0, /"id":"msg_[^"]*"/)) id = substr($0, RSTART, RLENGTH)
+      M[id] = m; I[id] = num("input_tokens"); W[id] = num("cache_creation_input_tokens"); C[id] = num("cache_read_input_tokens"); O[id] = num("output_tokens") }'
+tx_dir(){ # Claude Code's transcript folder for this project (sessions and their subagents), if we can find it
+  local base=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects p d
+  for p in "$ROOT" "$ROOTL"; do d=$base/$(printf '%s' "$p" | sed 's/[^A-Za-z0-9]/-/g'); [ -d "$d" ] && { printf '%s' "$d"; return 0; }; done; return 1; }
+cost_sum(){ # this clone's usage so far, all sessions and subagents: "<output> <input incl. cache>" (live from the transcripts)
+  local d; if d=$(tx_dir); then
+    find "$d" -name '*.jsonl' -exec cat {} + 2>/dev/null | grep '"usage"' | awk "$USAGE_AWK"' END { for (id in M) { o += O[id]; i += I[id] + W[id] + C[id] } printf "%d %d\n", o, i }'
+  else cat "$H"/.cost/*.tsv 2>/dev/null | awk -F'\t' '{ o += $5; i += $2 + $3 + $4 } END { printf "%d %d\n", o, i }'; fi; }
 kfmt(){ awk -v n="$1" 'BEGIN { if (n >= 1e6) printf "%.1fM", n / 1e6; else if (n >= 1e3) printf "%.0fk", n / 1e3; else printf "%d", n }'; }
 
 # ---- the deadline clock (.hackathon/deadline, local time YYYY-MM-DDTHH:MM) ----
@@ -966,11 +975,7 @@ _cost) # Stop hook (background): token usage of this session and its subagents, 
   tp=$(printf '%s' "$input" | tr '\n' ' ' | sed -n 's/.*"transcript_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed 's#\\\\#/#g')
   [ -f "$tp" ] && [ -d "$H" ] || exit 0
   sid=$(basename "$tp" .jsonl); mkdir -p "$H/.cost"
-  cat "$tp" "${tp%.jsonl}"/subagents/*.jsonl 2>/dev/null | grep '"usage"' | awk '
-    function num(k,   r) { if (match($0, "\"" k "\":[0-9]+")) { r = substr($0, RSTART, RLENGTH); sub(/.*:/, "", r); return r + 0 } return 0 }
-    { m = "?"; if (match($0, /"model":"[^"]*"/)) { m = substr($0, RSTART + 9, RLENGTH - 10) }
-      id = NR; if (match($0, /"id":"msg_[^"]*"/)) id = substr($0, RSTART, RLENGTH)
-      M[id] = m; I[id] = num("input_tokens"); W[id] = num("cache_creation_input_tokens"); C[id] = num("cache_read_input_tokens"); O[id] = num("output_tokens") }
+  cat "$tp" "${tp%.jsonl}"/subagents/*.jsonl 2>/dev/null | grep '"usage"' | awk "$USAGE_AWK"'
     END { for (id in M) { k = M[id]; i[k] += I[id]; w[k] += W[id]; c[k] += C[id]; o[k] += O[id] }
           for (k in i) printf "%s\t%d\t%d\t%d\t%d\n", k, i[k], w[k], c[k], o[k] }' > "$H/.cost/$sid.tsv.tmp" && mv "$H/.cost/$sid.tsv.tmp" "$H/.cost/$sid.tsv"
   exit 0 ;;

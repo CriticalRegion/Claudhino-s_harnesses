@@ -62,7 +62,7 @@ const jread = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
 const sha = s => crypto.createHash('sha1').update(String(s)).digest('hex').slice(0, 12);
 const ME = () => (rd(path.join(H, '.me')).trim() || env.HK_ME || '').toLowerCase();
 // Settings: env override > the team's `hk config` (MODE.md) > default (sprint/crunch: guard and stop check off).
-const CFG_DEF = { guard: 'off', stop_check: 'off', monitor: 'on', notify: 'on', budget_usd: '0' };
+const CFG_DEF = { guard: 'off', stop_check: 'off', monitor: 'on', notify: 'on', budget_usd: '0', lean: 'on' };
 const CFG_ENV = { guard: 'HK_GUARD', stop_check: 'HK_STOP_CHECK', monitor: 'HK_MONITOR', notify: 'HK_NOTIFY', budget_usd: 'HK_BUDGET_USD' };
 function cfg(k) { const e = env[CFG_ENV[k]]; if (e !== undefined && String(e).trim() !== '') return String(e).trim(); const v = modeTable()[k]; return v && v !== '-' ? v : CFG_DEF[k]; }
 const isOn = k => !off(cfg(k));
@@ -563,6 +563,20 @@ function guard(input) {
 const stFile = s => path.join(HH, s + '.json');
 const loadSt = s => jread(stFile(s), {});
 const saveSt = (s, o) => wr(stFile(s), JSON.stringify(o));
+function ctxTokens(input) {   // tokens in the context right now (the last assistant message's input side)
+  const tp = nativePath(input.transcript_path); if (!tp) return null;
+  try {
+    const fd = fs.openSync(tp, 'r'), size = fs.fstatSync(fd).size, len = Math.min(size, 400000), buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, size - len); fs.closeSync(fd);
+    const lines = buf.toString('utf8').split('\n');
+    for (let k = lines.length - 1; k >= (len < size ? 1 : 0); k--) {
+      let rec; try { rec = JSON.parse(lines[k]); } catch { continue; }
+      const u = rec && rec.message && rec.message.usage; if (!u) continue;
+      const tok = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0); if (tok) return tok;
+    }
+  } catch {}
+  return null;
+}
 function ctxPct(input, s) {
   const st = jread(path.join(HH, s + '.stat'), null);
   if (st && Date.now() - st.t < 300000 && typeof st.pct === 'number') return st.pct;
@@ -612,6 +626,15 @@ function post(input) {
         ? `CONTEXT ${pct}% full: finish the edit you're on, run /checkpoint, then /compact now (before auto-compaction cuts you off mid-task).`
         : `CONTEXT ${pct}% full: at your next milestone (task done and committed) run /checkpoint then /compact. Don't compact mid-edit.`);
     }
+  }
+  // lean: after `hk done`, is a fresh context worth it? Measured: re-orienting costs ~25k tokens and ~10 turns, so only a big session gains.
+  if (tool === 'Bash' && /(^|[\s;&|(])(\S*\/)?hk(\.sh)?\s+done\b/.test(String(ti.command || '')) && !off(cfg('lean'))) {
+    const tok = ctxTokens(input), at = num(env.HK_CLEAR_AT, 120000);
+    if (tok !== null) msgs.push(tok >= at
+      ? `FRESH CONTEXT: this session holds ~${Math.round(tok / 1000)}k tokens and every later turn re-reads them. ` + (autoOn()
+        ? 'Give the next claimed tasks to the builder agent (task id, card, demo path) so this context stops growing.'
+        : 'Write the checkpoint note (/hackathon:checkpoint; Next: /hackathon:sync, then claim), then tell the human in one line: "Safe to /clear now; the note and rules come back."')
+      : `CONTEXT OK: ~${Math.round(tok / 1000)}k tokens. Keep this session for the next task; a /clear would cost more to re-orient than it saves.`);
   }
   // budget (machine-wide for this project, from the statusline's cost reports)
   const budget = num(cfg('budget_usd'), 0);

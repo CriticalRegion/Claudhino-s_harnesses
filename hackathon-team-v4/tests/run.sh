@@ -835,11 +835,29 @@ hk qa done t-lean src/page.tsx:1 >/dev/null
 has "done: usage on the DONE line" "$(git -C "$T/r6.git" show hackathon-state:LOG.md | grep 'DONE t-lean')" "(usage: out 3k, in 43k)"
 has "cost --tasks lists it" "$(hk qa cost --tasks)" "DONE t-lean"
 has "done replaces the card with the pointer" "$(git -C "$T/r6.git" show hackathon-state:BOARD.md | grep t-lean)" "src/page.tsx:1"
+# fresh context only when the session is big (hh.js after hk done)
+TRS="$T/qa/small.jsonl"; printf '{"message":{"model":"claude-sonnet-5-5","usage":{"input_tokens":5,"cache_read_input_tokens":45000,"cache_creation_input_tokens":0}}}\n' > "$TRS"
+TRB="$T/qa/big.jsonl"; printf '{"message":{"model":"claude-sonnet-5-5","usage":{"input_tokens":5,"cache_read_input_tokens":150000,"cache_creation_input_tokens":0}}}\n' > "$TRB"
+dn(){ (cd "$T/qa" && printf '{"session_id":"%s","transcript_path":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$1" "$2" "$3" | node "$HARN/bin/hh.js" post 2>&1); }
+has "small session after hk done: keep going" "$(dn d1 "$TRS" 'hk done t1 app/x.ts:3')" "CONTEXT OK: ~45k"
+o=$(dn d2 "$TRB" '.hackathon/bin/hk done t1 app/x.ts:3'); has "big session after hk done: fresh context" "$o" "FRESH CONTEXT: this session holds ~150k"; has "with a human: checkpoint then /clear" "$o" "Safe to /clear now"
+eq "other commands: no context advice" "$(dn d3 "$TRB" 'git status' | grep -c 'CONTEXT OK\|FRESH CONTEXT')" 0
+eq "HK_CLEAR_AT moves the threshold" "$(HK_CLEAR_AT=40000 dn d4 "$TRS" 'hk done t1 x' | grep -c 'FRESH CONTEXT')" 1
+hk qa config set lean=off >/dev/null; eq "lean off: no context advice" "$(dn d5 "$TRB" 'hk done t1 x' | grep -c 'CONTEXT OK\|FRESH CONTEXT')" 0; hk qa config set lean=on >/dev/null
+# usage per task comes live from the transcripts when Claude Code's folder is found
+CC="$T/ccfg"; TD="$CC/projects/$(printf '%s' "$(cd "$T/qa" && pwd -P)" | sed 's/[^A-Za-z0-9]/-/g')"; mkdir -p "$TD/sess1/subagents"
+printf '%s\n' '{"message":{"id":"msg_a","model":"claude-sonnet-5-5","usage":{"input_tokens":100,"cache_creation_input_tokens":900,"cache_read_input_tokens":9000,"output_tokens":1000}}}' > "$TD/sess1.jsonl"
+hk qa add t-live "files: x" >/dev/null; (cd "$T/qa" && CLAUDE_CONFIG_DIR="$CC" bash .hackathon/bin/hk claim t-live >/dev/null)
+printf '%s\n' '{"message":{"id":"msg_b","model":"claude-sonnet-5-5","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":20000,"output_tokens":2000}}}' >> "$TD/sess1.jsonl"
+printf '%s\n' '{"message":{"id":"msg_c","model":"claude-haiku-5-5","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":5000,"output_tokens":500}}}' > "$TD/sess1/subagents/agent-1.jsonl"
+(cd "$T/qa" && CLAUDE_CONFIG_DIR="$CC" bash .hackathon/bin/hk done t-live x:1 >/dev/null)
+has "live usage within one turn (no Stop needed), subagents included" "$(git -C "$T/r6.git" show hackathon-state:LOG.md | grep 'DONE t-live')" "(usage: out 2k, in 25k)"
 # commands and agents
 has "builder agent exists" "$(cat "$HARN/agents/builder.md")" "name: builder"
-has "handoff offers a fresh context" "$(cat "$HARN/commands/handoff.md")" "Safe to /clear now"
+has "handoff follows the context notice" "$(cat "$HARN/commands/handoff.md")" "FRESH CONTEXT"
 has "claim hands tasks to builder in autonomous mode" "$(cat "$HARN/commands/claim.md")" "builder"
 has "slice adds a smoke script" "$(cat "$HARN/commands/slice.md")" "smoke"
+has "lean: dev server by PID, never pkill -f" "$(cat "$HARN/rules/lean.md")" "Never \`pkill -f\`"
 has "kickoff names a scaffold command" "$(cat "$HARN/commands/kickoff.md")" "scaffold command"
 has "flail hook registered" "$(cat "$HARN/hooks/hooks.json")" "PostToolUseFailure"
 

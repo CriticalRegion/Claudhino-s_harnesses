@@ -8,4 +8,4 @@ argument-hint: <task-id> <path:line of what to look at>
 4. `hk done $ARGUMENTS`. Teammates whose tasks depend on it are notified automatically. NOT PUSHED: tell the human (offline); `hk sync` retries later.
 5. If someone else is unblocked: `hk log "UNBLOCKS @name: <what>"`. Need an answer: `hk log "ASK @name: <one question>"`. A settled design choice: `hk decide "<one line>"`. Telegraphic, pointers (path:line), never code or logs.
 6. If you deployed: `/hackathon:demo-check`.
-7. Fresh context (lean on, `hk config get lean`): the task is finished, so this context is spent. Write the checkpoint note (`/hackathon:checkpoint`; Next: `/hackathon:sync`, then claim). With a human: end with one line, "Safe to /clear now; the note and rules come back." In autonomous mode just continue: the next task goes to the `builder` agent.
+7. Context: if a `FRESH CONTEXT` notice arrived after `hk done`, do exactly what it says. Otherwise (`CONTEXT OK`, or no notice) carry on in this session; don't suggest a /clear.

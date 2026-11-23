@@ -24,6 +24,8 @@
 .hackathon/.flail/
 .hackathon/.lean-applied
 .hackathon/MAP.md
+.hackathon/dev.log
+.hackathon/dev.pid
 CLAUDE.local.md
 .claude/settings.local.json
 .playwright-mcp/

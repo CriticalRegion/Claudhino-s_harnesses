@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # A/B usage test for the `lean` setting (NOT run in CI: it spends real Claude usage, ~1-2h of Sonnet).
 # Builds the same small app twice, headless, with the plugin loaded from this checkout:
-#   off  - lean=off, one continued session for all tasks (the v4.0 way)
-#   lean - lean=on, a fresh session per task (what "/clear after handoff" does)
+#   off  - lean=off (the v4.0 way)
+#   lean - lean=on
+# Both keep one continued session, as a person would (lean only suggests /clear once a session is big, and this app stays small).
 # Then checks the result independently (build + the demo path over HTTP) and compares token usage.
 # Usage: bash tests/ab/run.sh <empty work dir> [off|lean|both]   (Linux; needs claude, node, npm, git, curl)
 # Runs with --permission-mode bypassPermissions, confined to the throwaway work dir.
@@ -70,7 +71,7 @@ kill_servers(){ local d=$1 p c; for p in $(pgrep -f 'next|node' 2>/dev/null); do
 run_arm(){ local a=$1 d=$W/$1 first=1 t s; setup "$a"; : > "$W/$a.runlog"; s=$(date +%s)
   for t in $TASKS; do
     echo "== $a $t $(date +%T)" >> "$W/$a.runlog"
-    if [ "$a" = off ] && [ $first = 0 ]; then cont=--continue; else cont=; fi
+    if [ $first = 0 ]; then cont=--continue; else cont=; fi
     (cd "$d" && timeout "$TMO" claude -p "$(prompt $t)" $cont --model sonnet --plugin-dir "$HARN" \
        --permission-mode bypassPermissions --output-format json </dev/null >> "$W/$a.runlog" 2>&1)
     echo "   exit $?" >> "$W/$a.runlog"; first=0
