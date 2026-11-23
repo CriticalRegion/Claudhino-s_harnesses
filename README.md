@@ -43,6 +43,9 @@ Short docs: [hackathon-team-v4/README.md](hackathon-team-v4/README.md). Full gui
 
 The same harness as files copied into your repo (`install.sh`), at v3.1. Still works and is still tested in CI, but it's always on in a project (no pause/off), has no setup interview, and lacks the guard, monitor and stop check. A v3 project upgrades to v4 with `/hackathon:setup` (it offers to remove the copied files). Docs: [hackathon-team-v3/README.md](hackathon-team-v3/README.md).
 
+## Licence
+MIT, see [LICENSE](LICENSE). Parts of v4 are adapted from ECC (MIT); see [notices](hackathon-team-v4/THIRD_PARTY_NOTICES.md).
+
 ## Deprecated
 
 Kept for reference only; they get no fixes. Use v4.
