@@ -10,24 +10,52 @@ A Claude Code setup for hackathon teams of 2-4 people, each running their own ag
 
 **What it does**
 - **Demo-first rules:** build only the demo path, vertical slice first, fake what judges can't see (tagged `FAKE:` so the pitch stays honest), deploy early.
+- **Smarter kickoff:** `/kickoff` generates 5 ideas, drops ones that already exist, scores the rest on originality, real-world problem, sponsor tech and demo-to-effort, then scaffolds, deploys and splits the work into board tasks with dependencies.
 - **Deadline clock:** time left is injected into context; under 4h the agent polishes, under 1h it freezes features.
-- **Team board on its own git branch:** claim tasks (the remote is the lock, so simultaneous claims have exactly one winner), log events, record decisions. It never pushes, pulls or rebases your code.
+- **Team board on its own git branch:** claim tasks (the remote is the lock, so simultaneous claims have exactly one winner), log events, record decisions. It never pushes, pulls or rebases your code, and it works offline (queued, pushed later).
 - **Event notifications:** a teammate's `DONE` on a task you depend on, an `ASK` to you, or a contract change reaches your agent **mid-task** or **wakes it when idle**, as one line (~20-40 tokens). Everything else waits for your next prompt.
-- **Guards:** one ASK/ANSWER round trip, then it escalates to the humans; a warning before editing a teammate's file; stale-claim takeover; contract-change alerts.
-- **Autonomous mode** (`hk.sh auto on 2h`): agents approve their own prompts (the safety deny list still applies), never stop to ask, and keep working through the board until the work runs out, with a time budget and a team-wide kill switch (`hk.sh auto off`).
+- **Guards:** one ASK/ANSWER round trip, then it escalates to the humans; the first edit of a teammate's claimed or owned file is refused with a warning; stale claims can be taken over; contract changes are announced; pushes to main must pass `npm run check` and a Python syntax check.
+- **Autonomous mode** (`hk.sh auto on 2h`): agents approve their own prompts (the safety deny list still applies), never stop to ask, and keep working through the board until the work runs out, with a time budget, stuck detection and a team-wide kill switch (`hk.sh auto off`).
 - **Solo mode** (`hk.sh solo @alice`): for the endgame, one agent finishes alone with free rein over the repo while everyone else's agent is muted.
-- **Extras:** `/demo-check` (browser walk of the demo path after deploys), an optional Discord webhook (set once per machine; each hackathon gets its own forum post automatically) so humans can follow every event, Haiku `scout` and Sonnet `judge` agents, pinned context7 / Playwright / GitHub / Vercel MCP servers, and read-deny rules for secrets and build output.
-- **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash).
+- **Discord feed:** set a Forum channel's webhook once per machine (`hk.sh discord <url> --global`); every hackathon then gets its own forum post automatically, and each event appears as one line with an emoji, under the teammate's name. No bot, no per-event setup.
+- **Demo health:** `/demo-check` walks the demo path in a real browser after deploys and logs `DEMO GREEN` / `DEMO RED` for the team; the `judge` agent scores the demo against the judging criteria before submission.
+- **Token-lean by design:** ponytail (minimal code), a Haiku `scout` for lookups, terse rules, zero tokens when nothing changed, read-deny rules for `node_modules`, build output, lockfiles and `.env` files.
+- **Safe install:** `install.sh` merges into your repo (`.gitignore`, `.gitattributes`, `CLAUDE.md`, `.mcp.json`, settings) and never overwrites your files; pinned plugin and MCP versions.
+- **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash); 209 end-to-end tests run in CI on all three, and the event, autonomous and solo features were verified in live Claude Code sessions.
 
-**Quick start**
-```bash
-git clone https://github.com/CriticalRegion/Claudhino-s_harnesses
-bash Claudhino-s_harnesses/hackathon-team-v3/install.sh /path/to/your-repo   # merges, never overwrites
-```
-Then, in your repo:
-1. Commit and push the harness files.
-2. Each teammate runs `bash .hackathon/bin/hk.sh init <name>` once.
-3. Start `claude` once interactively to accept the trust dialog, then `/mcp` to sign in to GitHub and Vercel.
+**Set up in one paste**
+
+Paste this into Claude Code (or any coding agent) opened in your project folder. It works for the person setting up the project and for teammates joining it.
+
+````text
+Set up the Claudhino hackathon harness (v3) in this project. Do the steps in order and ask me
+for anything you need; don't guess names, URLs or dates.
+
+1. Check this folder is a git repo with at least one commit. If not, stop and tell me.
+2. If .hackathon/bin/hk.sh already exists, a teammate already installed the harness: skip to step 5.
+3. Clone https://github.com/CriticalRegion/Claudhino-s_harnesses into a temporary folder outside
+   this repo, then run: bash <that folder>/hackathon-team-v3/install.sh "$(pwd)"
+   Show me the installer's summary (added / merged / skipped files).
+4. Commit the harness files ("hackathon harness"). Ask me before pushing; push only if I say yes.
+5. Ask me for my team handle (short, lowercase, e.g. "alice"), then run:
+   bash .hackathon/bin/hk.sh init <handle>
+   (this creates or joins the team board, a separate "hackathon-state" branch on the remote; it never pushes code)
+6. Ask me for the hackathon deadline in local time. If .hackathon/deadline still contains
+   YYYY-MM-DD, write it as YYYY-MM-DDTHH:MM (nothing else in the file) and commit it.
+7. Discord (optional): ask me whether I have a Discord webhook URL for a Forum channel.
+   If I give you one, run: bash .hackathon/bin/hk.sh discord <url> --global
+   Treat the URL as a secret: never write it into any file in this repo, a commit, or a message.
+   Ask me before running: bash .hackathon/bin/hk.sh discord test   (it posts to the channel).
+8. Run bash .hackathon/bin/hk.sh sync and bash .hackathon/bin/hk.sh auto status and show me the output.
+9. Finish with what I still have to do myself:
+   - restart Claude Code here and accept the trust dialog and the ponytail plugin prompt,
+   - run /mcp and sign in to github and vercel,
+   - if I'm the first on the team: share the repo, and DM teammates the Discord webhook URL,
+   - next step: /kickoff <brief, theme, deadline, team size>.
+Don't turn on autonomous or solo mode, and don't change any other settings.
+````
+
+**Manual install instead:** `git clone https://github.com/CriticalRegion/Claudhino-s_harnesses && bash Claudhino-s_harnesses/hackathon-team-v3/install.sh /path/to/your-repo`, commit and push, then each teammate runs `bash .hackathon/bin/hk.sh init <name>`, starts `claude` once to accept the trust dialog, and signs in to GitHub and Vercel with `/mcp`.
 
 **Flow:** `/kickoff <brief>` → `/slice` (repeat) → `/demo-check` after deploys → `/cut` when behind → `/ship` in the last hour. Team: `/sync`, `/claim <id>`, `/handoff <id> <path:line>`.
 
