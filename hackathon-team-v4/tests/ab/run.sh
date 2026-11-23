@@ -11,6 +11,7 @@ set -u
 HARN=$(cd "$(dirname "$0")/../.." && pwd); W=${1:?usage: run.sh <work dir> [off|lean|both]}; ARMS=${2:-both}
 mkdir -p "$W"; W=$(cd "$W" && pwd); [ "$ARMS" = both ] && ARMS="off lean"
 export XDG_CONFIG_HOME=$W/xdg HK_NO_CLAUDE_CLI=1 HK_WATCH_MAX=5 GIT_TERMINAL_PROMPT=0
+export CLAUDE_CODE_EFFORT_LEVEL=${AB_EFFORT:-high}   # same effort in both arms, so only lean's other changes differ
 TMO=${AB_TASK_TIMEOUT:-1800}
 
 TASKS="t0-scaffold t1-api t2-redirect t3-ui"

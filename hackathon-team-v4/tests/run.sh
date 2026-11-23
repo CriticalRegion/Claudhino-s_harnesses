@@ -256,6 +256,7 @@ has "first attempt refused (agent sees it before editing)" "$o" '"permissionDeci
 eq "warns once per file: retry goes through" "$(ptool va package.json)" ""
 has "warns in a teammate's owned directory" "$(ptool va web/page.tsx)" "@bob's directory web/"
 eq "silent in my own directory" "$(ptool va api/route.ts)" ""
+has "inside a subagent (builder) too" "$(cd "$T/va" && printf '{"agent_id":"a1","tool_name":"Write","tool_input":{"file_path":"%s"}}' "$T/va/web/other.tsx" | bash .hackathon/bin/hk pretool)" "@bob's directory web/"
 eq "silent for unclaimed files" "$(ptool va README.md)" ""
 eq "silent outside the repo" "$(ptool va ../elsewhere.txt)" ""
 if [ -n "$WIN" ] && command -v cygpath >/dev/null; then
