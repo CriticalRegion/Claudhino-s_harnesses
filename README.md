@@ -61,6 +61,14 @@ Don't turn on autonomous or solo mode, and don't change any other settings.
 
 Short docs: [hackathon-team-v3/README.md](hackathon-team-v3/README.md). Full guide (every piece, tuning, troubleshooting, what was tested): [hackathon-team-v3/GUIDE.md](hackathon-team-v3/GUIDE.md).
 
+## Variants
+
+| Folder | Built on | What's different | Status |
+|---|---|---|---|
+| [`hackathon-hybrid-v1`](hackathon-hybrid-v1/) | `hackathon-team-v3` at v3.1 + [ECC](https://github.com/affaan-m/ECC) (MIT) | A safety **guard** that parses every shell command before it runs (destructive git in any spelling, delete one-liners, hook bypasses, secret reads, remote code, unknown `npx`, board forging, foreground dev servers); **context / loop / budget warnings**; a **stop check** that makes the agent fix files it broke; a **handoff** that survives `/compact`; desktop notifications; a statusline; `/verify`, `/checkpoint`, `/build-fix`, `/security-scan`, `/cost`; and fixes for every weakness a stress test found in v3.1 (offline-proof kill switch, hung-network fail-fast, UTC log times, capped output, hidden-unicode stripping, board archive) | Candidate: 404 end-to-end tests; the new hooks haven't been run in a live session yet |
+
+Install a variant the same way, with its own folder name: `bash Claudhino-s_harnesses/hackathon-hybrid-v1/install.sh /path/to/your-repo` (the one-paste setup prompt above works too if you swap the folder name). Details: [README](hackathon-hybrid-v1/README.md), [GUIDE](hackathon-hybrid-v1/GUIDE.md).
+
 ## Deprecated
 
 Kept for reference only; they get no fixes. Use v3.

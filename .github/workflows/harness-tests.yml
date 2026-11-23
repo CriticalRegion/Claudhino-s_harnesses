@@ -45,3 +45,7 @@ jobs:
 
       - name: hackathon-team-v3 end-to-end tests
         run: bash hackathon-team-v3/tests/run.sh
+
+      - name: hackathon-hybrid-v1 end-to-end tests
+        if: always()
+        run: bash hackathon-hybrid-v1/tests/run.sh
