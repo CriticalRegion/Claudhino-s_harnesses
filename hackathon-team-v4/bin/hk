@@ -49,6 +49,9 @@ export GIT_TERMINAL_PROMPT=0 HK_SKIP=1
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes -o ConnectTimeout=8}"
 
 gm(){ git -C "$ROOT" "$@"; }
+phys(){ # path with symlinks resolved (through its nearest existing folder: new files and folders count too)
+  local p=$1 t=""; while [ -n "$p" ] && [ "$p" != / ] && [ "$p" != . ] && [ ! -d "$p" ]; do t="/${p##*/}$t"; p=${p%/*}; done
+  [ -d "${p:-/}" ] && (cd "${p:-/}" 2>/dev/null && printf '%s%s' "$(pwd -P)" "$t") || printf '%s' "$1"; }
 g(){ git -C "$WT" "$@"; }
 if ! gm rev-parse --git-dir >/dev/null 2>&1; then quiet_cmd "$@" && exit 0; die "hk: $ROOT is not a git repo"; fi
 paused(){ [ -f "$H/.paused" ] || [ -f "$H/.off" ]; }
@@ -692,6 +695,7 @@ pretool) # before a tool runs: autonomous no-questions rule, team rules, config 
     case $f in [A-Za-z]:/*)   # Windows drive path -> /c/... like Git Bash's pwd
       if command -v cygpath >/dev/null 2>&1; then f=$(cygpath -u "$f")
       else f="/$(printf '%s' "${f%%:*}" | tr 'A-Z' 'a-z')${f#?:}"; fi;; esac
+    case $f in "$ROOT"/*|"$ROOTL"/*) ;; *) f=$(phys "$f");; esac   # macOS: /var/... vs /private/var/... (ROOT is resolved)
     case $f in "$ROOT"/*) rel=${f#"$ROOT"/};; "$ROOTL"/*) rel=${f#"$ROOTL"/};; *) exit 0;; esac
     case $rel in .hackathon/*|.claude/*) exit 0;; esac
   fi

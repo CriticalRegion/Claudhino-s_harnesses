@@ -9,6 +9,7 @@ cleanup(){ [ -n "$SRV" ] && kill "$SRV" 2>/dev/null; for f in "$T"/*/.hackathon/
   sleep 0.5; rm -rf "$T" 2>/dev/null || { sleep 2; rm -rf "$T"; }; }
 trap cleanup EXIT
 case $(uname -s) in MINGW*|MSYS*|CYGWIN*) WIN=1;; *) WIN=;; esac   # Git Bash on Windows: slower process start
+HHJS=$HARN/bin/hh.js; [ -n "$WIN" ] && HHJS=$(cygpath -m "$HHJS")   # a native path: checks below switch off Git Bash's path rewriting
 PY=; for c in python3 python; do "$c" -c 'import sys' >/dev/null 2>&1 && { PY=$c; break; }; done
 echo "# platform: $(uname -s), bash $BASH_VERSION, $(awk --version 2>/dev/null | head -n1 | cut -c1-40)${WIN:+ (Windows)}" 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
@@ -500,7 +501,7 @@ has "gitignore covers monitor state" "$(cat "$T/seed/.gitignore")" ".hackathon/.
 export HK_GUARD=on HK_STOP_CHECK=on   # v4 defaults them off (sprint profile); hybrid's tests exercise them switched on
 git clone -q "$T/remote.git" "$T/h1"; git clone -q "$T/remote.git" "$T/h2"
 hk h1 init hana >/dev/null; hk h2 init hugo >/dev/null
-hh(){ (cd "$T/$1" && shift && MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' node "$HARN/bin/hh.js" "$@" 2>&1); }   # Git Bash would rewrite /bin/rm in arguments
+hh(){ (cd "$T/$1" && shift && MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' node "$HHJS" "$@" 2>&1); }   # Git Bash would rewrite /bin/rm in arguments
 hj(){ (cd "$T/$1" && printf '%s' "$3" | node "$HARN/bin/hh.js" "$2" 2>&1); }
 dec(){ hh h1 check "$1" | cut -f1; }
 echo "# hybrid: guard - attacks from the v3.1 stress test are gated"
@@ -813,7 +814,7 @@ hk n2 log "UNBLOCKS @nia: leaving my agent on tonight" >/dev/null; hk n3 log "UN
 o=$(hk n1 night start --until 8h --budget 50); has "night starts" "$o" "NIGHT ON until"; has "says who's active" "$o" "@nob"
 has "says the guard is on for the shift" "$o" "safety guard on"
 has "guard and stop check on for the shift" "$(rs MODE.md)" "| guard | on |"
-eq "the guard refuses night start" "$(cd "$T/n1" && MSYS_NO_PATHCONV=1 node "$HARN/bin/hh.js" check 'hk night start --until 07:00' | cut -f1)" deny
+eq "the guard refuses night start" "$(cd "$T/n1" && MSYS_NO_PATHCONV=1 node "$HHJS" check 'hk night start --until 07:00' | cut -f1)" deny
 eq "the guard lets agents stop it" "$(cd "$T/n1" && node "$HARN/bin/hh.js" check 'hk night stop' | cut -f1)" allow
 has "plan published to the board branch" "$(rs NIGHT.md)" "## Done when"
 has "tasks on the board" "$(rs BOARD.md)" "| api |"
