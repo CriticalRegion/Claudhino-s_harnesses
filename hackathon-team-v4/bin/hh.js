@@ -426,7 +426,7 @@ function analyse(src, ctx, depth, F) {
     const hkAt = isHk(argv[0]) ? 0 : (SHELLS.has(name) && isHk(rest[0]) ? 1 : -1);
     if (hkAt >= 0) {
       const a = argv.slice(hkAt + 1), sub = a[0] || '', arg = a[1] || '';
-      const deny = (sub === 'auto' && (arg === 'on' || arg === 'clear')) || (sub === 'solo' && arg !== 'off') || (sub === 'archive' && a.includes('--delete-remote'));
+      const deny = (sub === 'auto' && (arg === 'on' || arg === 'clear')) || (sub === 'solo' && arg !== 'off') || (sub === 'archive' && a.includes('--delete-remote')) || (sub === 'night' && arg === 'start');
       const gate = !deny && (['init', 'note', 'off', 'pause', 'resume'].includes(sub) || (sub === 'discord' && !['status', 'test'].includes(arg))
         || (sub === 'demo-first' && ['on', 'off', 'clear'].includes(arg)) || (sub === 'config' && ['set', 'profile'].includes(arg)));
       if (deny) F.push(['human-only', 'deny', `HUMAN ONLY: "hk ${sub}${arg ? ' ' + arg : ''}" widens what agents may do. Ask your human to run it in their own terminal.`]);
@@ -748,7 +748,8 @@ function statusline(input) {
   }
   const t = modeTable(), flags = [];
   if (t.solo && t.solo !== '-') flags.push('SOLO ' + t.solo);
-  if (autoOn()) flags.push('AUTO');
+  if (t.night === 'on') { const u = new Date(num(t.night_until, 0) * 1000); flags.push(`NIGHT→${String(u.getHours()).padStart(2, '0')}:${String(u.getMinutes()).padStart(2, '0')}`); }
+  else if (autoOn()) flags.push('AUTO');
   if (demoFirstOff()) flags.push('FULL-BUILD');
   if (flags.length) parts.push(flags.join(' '));
   const demo = rd(path.join(WT, 'LOG.md')).split('\n').filter(l => / DEMO (GREEN|RED)/.test(l)).pop();

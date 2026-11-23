@@ -8,7 +8,7 @@
     {
       "name": "hackathon",
       "source": "./hackathon-team-v4",
-      "description": "Hackathon team harness (v4): setup interview, Opus kickoff, team board with live events, autonomous/solo modes, pause/off per project."
+      "description": "Hackathon team harness (v4): setup interview, Opus kickoff, team board with live events, autonomous/solo modes, a night shift where agents build and critique each other toward a goal, pause/off per project."
     }
   ]
 }
