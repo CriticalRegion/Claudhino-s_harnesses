@@ -18,7 +18,7 @@ hackathon-team-v4/
 ├── bin/hh.js, bin/hhw           # guard, monitor, stop check, handoff, notifications, statusline, scan (Node)
 ├── .mcp.json                    # context7 and Playwright (pinned)
 ├── templates/                   # what setup writes into a project
-├── tests/run.sh                 # 530 end-to-end checks
+├── tests/run.sh                 # 538 end-to-end checks
 └── THIRD_PARTY_NOTICES.md
 ```
 **What a project gets** (from `/hackathon:setup` → `hk install-project`): `.hackathon/` (PLAN.md, IDEAS.md, deadline, the launcher `.hackathon/bin/hk`, the board checkout `.hackathon/state/` on branch `hackathon-state`), `.githooks/` (pre-push, post-commit), merged lines in `.gitignore`/`.gitattributes`, and merged shared settings in `.claude/settings.json` (permissions, model, status line, compaction threshold, and the plugin marketplace so teammates are prompted to install). No CLAUDE.md changes: the rules come from the plugin.
@@ -50,7 +50,7 @@ hackathon-team-v4/
 | When | Command | What happens |
 |---|---|---|
 | Before | `/hackathon:research <URL>` | Sponsors (newest tech), judges, criteria, tracks, past winners → RESEARCH.md |
-| Hour 0 | `/hackathon:kickoff` (Opus) | 8-10 ideas from different angles, web-checked for "already exists", scored by `judge` on the **weighted** criteria + feasibility + go/no-go + demo moment; top 3 shown, **you pick** with `/hackathon:kickoff <pick>`; then a lean plan (pitch, demo path, stack, milestones on the clock, cut list) and the first board task `t0-scaffold` |
+| Hour 0 | `/hackathon:kickoff` (Opus) | 8-10 ideas from different angles, web-checked for "already exists", scored by `judge` on the **weighted** criteria + feasibility + go/no-go + demo moment; top 3 shown, **you pick** with `/hackathon:kickoff <pick>` (with `ideation=off` you bring the idea: `/hackathon:kickoff <your idea>` skips straight to the plan); then a lean plan (pitch, demo path, stack, milestones on the clock, cut list) and the first board task `t0-scaffold` |
 | Build | `/hackathon:slice`, `sync`, `claim`, `handoff`, `demo-check`, `build-fix`, `verify`, `checkpoint` | Thin slices (or full features when demo-first is off); handoff verifies, (optionally) reviews, pushes code, marks done |
 | Behind | `/hackathon:cut`, `/hackathon:pivot` (Opus) | Cut scope; or switch to a runner-up from IDEAS.md |
 | Last hour | `/hackathon:ship` | verify full, deploy, security scan, README with the FAKE list, 2-minute demo script + backup recording, submission text, `judge`, usage |
@@ -64,6 +64,7 @@ All team settings live on the board (`MODE.md`), so every teammate's agent follo
 
 | Setting | sprint (default) | crunch | careful | What it does |
 |---|---|---|---|---|
+| ideation | on | on | on | `/hackathon:kickoff` generates and scores ideas; `off` = you bring your own idea and kickoff only plans it |
 | demo_first | on | on | off | Demo-first rules vs build-it-properly |
 | collision | refuse | warn | refuse | Editing a teammate's claimed/owned file: refuse once / warn / off |
 | reviewer | off | off | on | `reviewer` agent at handoff in the last 4 hours |
@@ -128,7 +129,7 @@ Only humans switch autonomous or solo on: `hk` refuses when run by an agent, the
 ## 12. Changes from v3, and credits
 - **From v3.1** (the team): `/hackathon:research`, `/hackathon:postmortem` and machine-wide lessons; autonomous safety (risky commands never auto-approved, humans switch modes on); macOS fixes.
 - **From hackathon-hybrid-v1** (the team, PR #11): `hh.js` (guard, monitor, stop check, handoff, notifications, statusline, scan), `/verify`, `/checkpoint`, `/build-fix`, `/security-scan`, `/cost`, `build-fixer`; hk fixes (offline-first kill switch, fail-fast network, separate fetch lock, UTC, invisible-character stripping, capped output, team cost, `archive`). In v4 the guard and stop check are settings (off in sprint/crunch), and identity/settings commands ask instead of being refused so setup works.
-- **New in v4**: plugin packaging and the `claudhino` marketplace; `/hackathon:setup` with profiles and toggles; settings on the board; pause/off; rule injection by mode; Opus kickoff with the human's pick and a lean plan; `/hackathon:pivot`; the `deep` and `reviewer` agents; team rules (`.hackathon/rules/*.md`: `on: edit|bash`, `match: <regex>`, `action: warn|block`); config protection; usage log by model; `install-project`, `migrate-v3`, `status`; the project launcher.
+- **New in v4**: plugin packaging and the `claudhino` marketplace; `/hackathon:setup` with profiles and toggles; settings on the board; pause/off; rule injection by mode; Opus kickoff with the human's pick (or your own idea, `ideation=off`) and a lean plan; `/hackathon:pivot`; the `deep` and `reviewer` agents; team rules (`.hackathon/rules/*.md`: `on: edit|bash`, `match: <regex>`, `action: warn|block`); config protection; usage log by model; `install-project`, `migrate-v3`, `status`; the project launcher.
 - Adapted from [ECC](https://github.com/affaan-m/ECC) (MIT): see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## 13. Troubleshooting
@@ -144,6 +145,6 @@ Only humans switch autonomous or solo on: `hk` refuses when run by an agent, the
 | Everything else | v3's table still applies: `hackathon-team-v3/GUIDE.md` section 7 |
 
 ## 14. What was tested
-- `tests/run.sh`: **530 checks** (v3.1's 255 and hybrid-v1's 150, adapted to the plugin layout, plus v4's: settings and profiles, rules injection and compaction, pause/resume/off including git hooks, clock thresholds, notification toggles, collision modes, config protection, team rules, auto-approve, the `deep` nudge, mode rules travelling with mode changes, the usage log, the guard following settings, v3 migration, the launcher finding the plugin), on Linux; CI runs it on Linux, macOS and Windows. shellcheck clean; `claude plugin validate` passes (the directory listing would also want a licence file).
+- `tests/run.sh`: **538 checks** (v3.1's 255 and hybrid-v1's 150, adapted to the plugin layout, plus v4's: settings and profiles, rules injection and compaction, pause/resume/off including git hooks, clock thresholds, notification toggles, collision modes, config protection, team rules, auto-approve, the `deep` nudge, mode rules travelling with mode changes, the usage log, the guard following settings, v3 migration, the launcher finding the plugin), on Linux; CI runs it on Linux, macOS and Windows. shellcheck clean; `claude plugin validate` passes (the directory listing would also want a licence file).
 - **Live** (Claude Code 2.1.325, plugin loaded with `--plugin-dir`, a fresh project with a local remote): `/hackathon:setup` end to end (project pieces, board, event section, profile with the confirmation prompt, commit; the status line); `/hackathon:kickoff` phase 1 on Opus (web-checked ideas, `judge` scores, top 3, stopped for the pick) and phase 2 (lean plan, `t0-scaffold`, commit); pause (nothing injected, status line says paused) and resume (rules, clock and identity back); a session without the plugin (no rules, no commands). Found and fixed live: setup skipped the profile question (now mandatory), web tools prompted on every search (now allowed).
 - Not tested live: installing from the GitHub marketplace (only `--plugin-dir`), `/hackathon:off` with a marketplace install, macOS/Windows sessions, a real multi-person event. When testing live on a machine with a machine-wide Discord webhook, set `XDG_CONFIG_HOME` to a scratch folder or `hk discord off` in the test project first: the harness posts its own events.

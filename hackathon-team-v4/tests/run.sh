@@ -647,6 +647,14 @@ o=$(hk qa config show); has "config show lists settings" "$o" "collision"; has "
 eq "default profile is sprint" "$(hk qa config get profile)" sprint
 eq "guard off by default (sprint)" "$(hk qa config get guard)" off
 eq "wake cap default 3" "$(hk qa config get wake_cap)" 3
+eq "ideation on by default" "$(hk qa config get ideation)" on
+eq "bad ideation value refused" "$(hkrc qa config set ideation=maybe)" 1
+has "ideation can be switched off" "$(hk qa config set ideation=off)" "CONFIG ideation=off"
+eq "ideation off stored" "$(hk qa config get ideation)" off
+hk qa config set ideation=on >/dev/null; eq "ideation back on" "$(hk qa config get ideation)" on
+has "kickoff reads the ideation setting" "$(cat "$HARN/commands/kickoff.md")" "hk config get ideation"
+has "setup asks about ideation" "$(cat "$HARN/commands/setup.md")" "ideation=off"
+has "pivot handles no runners-up" "$(cat "$HARN/commands/pivot.md")" "no runners-up"
 eq "unknown key refused" "$(hkrc qa config set colour=blue)" 1
 eq "bad value refused" "$(hkrc qa config set collision=sometimes)" 1
 eq "bad number refused" "$(hkrc qa config set stale_min=soon)" 1

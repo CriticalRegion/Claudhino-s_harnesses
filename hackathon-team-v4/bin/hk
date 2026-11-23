@@ -176,7 +176,7 @@ ensure_layout(){ # create/upgrade state files (v2 boards gain a deps column; SEE
 
 # ---- configuration: every toggle lives on the board (MODE.md) so the whole team shares it ----
 # key:default:ENV_OVERRIDE. Values are validated by `config set`.
-CFG_DEFS="profile:sprint: demo_first:on: collision:refuse:HK_COLLISION loop_guard:on: reviewer:off: midtask:on: wake:on:
+CFG_DEFS="profile:sprint: ideation:on: demo_first:on: collision:refuse:HK_COLLISION loop_guard:on: reviewer:off: midtask:on: wake:on:
 wake_cap:3:HK_WAKE_CAP contract_alerts:on: prepush:on: config_protect:on: autoapprove:off: auto_budget:3h:
 auto_stuck:3:HK_AUTO_STUCK polish_at:240:HK_POLISH_AT freeze_at:60:HK_FREEZE_AT stale_min:45:HK_STALE_MIN
 fetch_every:20:HK_FETCH_EVERY watch_every:15:HK_WATCH_INTERVAL guard:off:HK_GUARD stop_check:off:HK_STOP_CHECK
@@ -191,7 +191,7 @@ cfg_ok(){ # key value -> valid?
   case $1 in
     profile) case $2 in sprint|crunch|careful) return 0;; esac;;
     collision) case $2 in refuse|warn|off) return 0;; esac;;
-    demo_first|loop_guard|reviewer|midtask|wake|contract_alerts|prepush|config_protect|autoapprove|guard|stop_check|monitor|notify) case $2 in on|off) return 0;; esac;;
+    ideation|demo_first|loop_guard|reviewer|midtask|wake|contract_alerts|prepush|config_protect|autoapprove|guard|stop_check|monitor|notify) case $2 in on|off) return 0;; esac;;
     budget_usd) case $2 in ''|*[!0-9.]*) ;; *) return 0;; esac;;
     auto_budget) dur "$2" >/dev/null && return 0;;
     wake_cap|auto_stuck|polish_at|freeze_at|stale_min|fetch_every|watch_every) case $2 in ''|*[!0-9]*) ;; *) return 0;; esac;;

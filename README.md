@@ -10,14 +10,14 @@ A Claude Code plugin for hackathon teams of 1-4 people, each running their own a
 
 **What it does**
 - **Setup interview per event** (`/hackathon:setup`): the event, deadline, judging criteria and weights, team; a profile (**sprint**, **crunch**, **careful**) and any of ~25 toggles, shared by the whole team through the board.
-- **Opus ideation, you pick** (`/hackathon:kickoff`): 8-10 ideas from different angles, web-checked for "already exists", scored by a strict Opus `judge` on the weighted criteria; you choose from the top 3; then a lean plan and the first task. `/hackathon:pivot` switches to a runner-up later.
+- **Opus ideation, you pick** (`/hackathon:kickoff`): 8-10 ideas from different angles, web-checked for "already exists", scored by a strict Opus `judge` on the weighted criteria; you choose from the top 3; then a lean plan and the first task. **Switchable**: already have an idea? `hk config set ideation=off` (setup asks) and kickoff just plans yours. `/hackathon:pivot` switches to a runner-up later.
 - **Demo-first rules, switchable** to build-it-properly; a **deadline clock** that moves agents into polish and feature freeze; rules injected only when active (never in your CLAUDE.md).
 - **Team board on its own git branch**: claims with one winner, dependencies, offline queueing; it never touches your code.
 - **Live events**: a teammate's `DONE` on a task you depend on, an `ASK` to you, or a contract change reaches your agent **mid-task** or **wakes it when idle**, as one line. Loop guard, collision guard, stale-claim takeover, contract alerts.
 - **Autonomous mode** and **solo mode** (humans switch them on; a kill switch that works offline); a **`deep`** agent hands hard problems to Opus.
 - **Guard, monitor, stop check, handoff across `/compact`, status line, security scan**, from the team's hybrid-v1, each a setting (guard and stop check on in the careful profile).
 - **Discord feed** (one forum post per hackathon, under each person's name), **usage log** by model and per teammate, **research** before and **postmortem lessons** after every event.
-- **Runs on** Linux, macOS and Windows (Git Bash). 530 end-to-end tests in CI on all three; setup, kickoff, pause/resume and a plugin-less session checked live in Claude Code.
+- **Runs on** Linux, macOS and Windows (Git Bash). 538 end-to-end tests in CI on all three; setup, kickoff, pause/resume and a plugin-less session checked live in Claude Code.
 
 **Install once per machine**, in Claude Code:
 ```

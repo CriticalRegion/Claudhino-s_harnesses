@@ -1,10 +1,12 @@
 ---
-description: Ideas and a lean plan for this hackathon, on Opus. You choose the idea; nothing gets built here.
+description: Ideas and a lean plan for this hackathon, on Opus (or just the plan, when idea generation is off). You choose the idea; nothing gets built here.
 argument-hint: [extra brief, or your pick from the shortlist]
 model: opus
 ---
 Input: $ARGUMENTS
-If `.hackathon/IDEAS.md` already has a scored shortlist and the input names one of those ideas (a number, a name, or a combination), skip to Phase 2. Otherwise do Phase 1.
+First run `hk config get ideation`.
+- `off` (the team brings its own idea): skip Phase 1. The idea is the input, else the one-line pitch or brief in PLAN.md; if there's none, ask the human for it in plain text and stop. Then do Phase 2 with that idea (write it to IDEAS.md as the chosen idea).
+- `on` (default): if `.hackathon/IDEAS.md` already has a scored shortlist and the input names one of those ideas (a number, a name, or a combination), skip to Phase 2. Otherwise do Phase 1.
 
 Phase 1 - ideas (stop at the end):
 1. Read the "## Event" section of `.hackathon/PLAN.md`, `.hackathon/RESEARCH.md` if it exists, and `hk lessons`. If the Event section is mostly empty, suggest `/hackathon:setup` or ask at most 3 questions (deadline, judging criteria, team skills).
