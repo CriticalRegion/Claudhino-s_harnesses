@@ -27,7 +27,7 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_
 PLUGIN=$(cd "$(dirname "$0")/.." && pwd -P) || exit 1
 SELF=$PLUGIN/bin/hk
 CMD=${1:-}; [ $# -gt 0 ] && shift
-HOOKCMDS=" session-start rules peek posttool pretool watch permit autostop contract _cost _beat _bgfetch _post "
+HOOKCMDS=" session-start rules peek posttool pretool watch permit autostop contract flail _cost _beat _bgfetch _post _map "
 quiet_cmd(){ case "$HOOKCMDS" in *" $CMD "*) return 0;; esac
   { [ "$CMD" = sync ] && [ "${1:-}" = --hook ]; } || { [ "$CMD" = clock ] && [ -n "${1:-}" ]; }; }
 die(){ echo "$*"; exit 1; }
@@ -130,6 +130,16 @@ json_ctx(){ # event text -> hookSpecificOutput JSON with additionalContext
     | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
   printf '{"hookSpecificOutput":{"hookEventName":"%s","additionalContext":"%s"}}\n' "$1" "$esc"; }
 
+flail_sid(){ # hook JSON -> per-agent key (a subagent counts its own failures)
+  local a; a=$(printf '%s' "$1" | tr '\n' ' ' | sed -n 's/.*"agent_id"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9_-]*\)".*/\1/p')
+  [ -n "$a" ] || a=$(printf '%s' "$1" | tr '\n' ' ' | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9_-]*\)".*/\1/p')
+  printf '%s' "${a:-main}"; }
+flail_key(){ # hook JSON -> checksum of the Bash command, numbers and whitespace normalised (fails if it isn't Bash)
+  local c; printf '%s' "$1" | grep -q '"tool_name"[[:space:]]*:[[:space:]]*"Bash"' || return 1
+  c=$(printf '%s' "$1" | tr '\n' ' ' | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(\([^"\\]\|\\.\)*\)".*/\1/p')
+  [ -n "$c" ] || return 1
+  printf '%s' "$c" | tr -s ' \t' ' ' | sed 's/[0-9][0-9]*/N/g' | cksum | cut -d' ' -f1; }
+
 # ---- board: markdown table, columns found by header name (| id | owner | status | deps | ref |) ----
 AWKLIB='function trim(s){ gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
 function hdr(   i){ if ($0 ~ /^\|/ && trim($2) == "id") { for (i = 2; i < NF; i++) C[trim($i)] = i; return 1 } return 0 }
@@ -176,7 +186,7 @@ ensure_layout(){ # create/upgrade state files (v2 boards gain a deps column; SEE
 
 # ---- configuration: every toggle lives on the board (MODE.md) so the whole team shares it ----
 # key:default:ENV_OVERRIDE. Values are validated by `config set`.
-CFG_DEFS="profile:sprint: ideation:on: demo_first:on: collision:refuse:HK_COLLISION loop_guard:on: reviewer:off: midtask:on: wake:on:
+CFG_DEFS="profile:sprint: lean:on: ideation:on: demo_first:on: collision:refuse:HK_COLLISION loop_guard:on: reviewer:off: midtask:on: wake:on:
 wake_cap:3:HK_WAKE_CAP contract_alerts:on: prepush:on: config_protect:on: autoapprove:off: auto_budget:3h:
 auto_stuck:3:HK_AUTO_STUCK polish_at:240:HK_POLISH_AT freeze_at:60:HK_FREEZE_AT stale_min:45:HK_STALE_MIN
 fetch_every:20:HK_FETCH_EVERY watch_every:15:HK_WATCH_INTERVAL guard:off:HK_GUARD stop_check:off:HK_STOP_CHECK
@@ -191,16 +201,26 @@ cfg_ok(){ # key value -> valid?
   case $1 in
     profile) case $2 in sprint|crunch|careful) return 0;; esac;;
     collision) case $2 in refuse|warn|off) return 0;; esac;;
-    ideation|demo_first|loop_guard|reviewer|midtask|wake|contract_alerts|prepush|config_protect|autoapprove|guard|stop_check|monitor|notify) case $2 in on|off) return 0;; esac;;
+    lean|ideation|demo_first|loop_guard|reviewer|midtask|wake|contract_alerts|prepush|config_protect|autoapprove|guard|stop_check|monitor|notify) case $2 in on|off) return 0;; esac;;
     budget_usd) case $2 in ''|*[!0-9.]*) ;; *) return 0;; esac;;
     auto_budget) dur "$2" >/dev/null && return 0;;
     wake_cap|auto_stuck|polish_at|freeze_at|stale_min|fetch_every|watch_every) case $2 in ''|*[!0-9]*) ;; *) return 0;; esac;;
   esac; return 1; }
 profile_kv(){ case $1 in
-  sprint)  echo "profile=sprint demo_first=on collision=refuse reviewer=off wake_cap=3 prepush=on autoapprove=off auto_budget=3h stale_min=45 polish_at=240 freeze_at=60 guard=off stop_check=off";;
-  crunch)  echo "profile=crunch demo_first=on collision=warn reviewer=off wake_cap=12 prepush=off autoapprove=on auto_budget=6h stale_min=30 polish_at=360 freeze_at=60 guard=off stop_check=off";;
-  careful) echo "profile=careful demo_first=off collision=refuse reviewer=on wake_cap=3 prepush=on autoapprove=off auto_budget=3h stale_min=60 polish_at=240 freeze_at=90 guard=on stop_check=on";;
+  sprint)  echo "profile=sprint lean=on demo_first=on collision=refuse reviewer=off wake_cap=3 prepush=on autoapprove=off auto_budget=3h stale_min=45 polish_at=240 freeze_at=60 guard=off stop_check=off";;
+  crunch)  echo "profile=crunch lean=on demo_first=on collision=warn reviewer=off wake_cap=12 prepush=off autoapprove=on auto_budget=6h stale_min=30 polish_at=360 freeze_at=60 guard=off stop_check=off";;
+  careful) echo "profile=careful lean=off demo_first=off collision=refuse reviewer=on wake_cap=3 prepush=on autoapprove=off auto_budget=3h stale_min=60 polish_at=240 freeze_at=90 guard=on stop_check=on";;
   esac; }
+
+# ---- lean: build-stage token savings (rules/lean.md + a few Claude Code settings in .claude/settings.local.json) ----
+apply_lean(){ # make this clone's .claude/settings.local.json match the effective lean setting (next session onwards)
+  local want; want=$(cfg lean); [ "$(cat "$H/.lean-applied" 2>/dev/null)" = "$want" ] && return 0
+  command -v node >/dev/null 2>&1 || return 0
+  mkdir -p "$ROOT/.claude" && node "$PLUGIN/templates/merge-json.js" "$ROOT/.claude/settings.local.json" - "lean=$want" >/dev/null 2>&1 \
+    && echo "$want" > "$H/.lean-applied"; return 0; }
+cost_sum(){ # this clone's usage so far, all sessions: "<output> <input incl. cache>"
+  cat "$H"/.cost/*.tsv 2>/dev/null | awk -F'\t' '{ o += $5; i += $2 + $3 + $4 } END { printf "%d %d\n", o, i }'; }
+kfmt(){ awk -v n="$1" 'BEGIN { if (n >= 1e6) printf "%.1fM", n / 1e6; else if (n >= 1e3) printf "%.0fk", n / 1e3; else printf "%d", n }'; }
 
 # ---- the deadline clock (.hackathon/deadline, local time YYYY-MM-DDTHH:MM) ----
 clock_min(){ # minutes left, or nothing when no deadline is set
@@ -480,8 +500,10 @@ peek) # every prompt: urgent + fyi lines since last look (from the last backgrou
   bg_fetch_maybe; exit 0 ;;
 
 posttool) # after every tool call: inject urgent lines mid-turn (cheap; no network in this process)
-  inited && [ -n "$R" ] || exit 0
   input=""; [ -t 0 ] || input=$(tmo 2 cat)   # hook JSON on stdin; never block on an open pipe
+  if [ -d "$H/.flail" ]; then f=$H/.flail/$(flail_sid "$input")   # a command that failed before now works: forget it
+    if [ -f "$f" ] && key=$(flail_key "$input"); then grep -v "^$key " "$f" > "$f.tmp" 2>/dev/null; mv "$f.tmp" "$f"; fi; fi
+  inited && [ -n "$R" ] || exit 0
   printf '%s' "$input" | grep -q '"agent_id"[[:space:]]*:[[:space:]]*"[^"]' && exit 0   # inside a subagent: leave it for the main agent
   bg_fetch_maybe
   r=$(rref) || exit 0; u=$(cat "$H/.ucur" 2>/dev/null || true)
@@ -699,8 +721,8 @@ claim)
     fi
     setcol "$id" owner "@$ME"; setcol "$id" status doing; logline "$ev"; touch_seen
     g add -A && g commit -qm "claim $id ($ME)" >/dev/null || die "hk: commit failed"
-    [ -n "$R" ] || { echo "CLAIMED $id (no remote: local only)"; exit 0; }
-    push1 && { announce "$before"; echo "${ev%% (*}"; exit 0; }
+    [ -n "$R" ] || { mkdir -p "$H/.cost"; cost_sum > "$H/.cost/claim-$id.snap"; echo "CLAIMED $id (no remote: local only)"; exit 0; }
+    push1 && { announce "$before"; mkdir -p "$H/.cost"; cost_sum > "$H/.cost/claim-$id.snap"; echo "${ev%% (*}"; exit 0; }
     g reset -q --hard HEAD~1   # drop our claim, re-read the latest board, try again
   done
   die "claim NOT made: push kept failing. Run hk sync and retry." ;;
@@ -717,7 +739,12 @@ done)
   [ -n "$(get "$id" id)" ] || die "no task '$id'"
   owner=$(get "$id" owner)
   [ "$owner" = "@$ME" ] || [ "$owner" = "-" ] || die "not yours: $id is owned by $owner"
-  setcol "$id" owner "@$ME"; setcol "$id" status "done"; setcol "$id" ref "$ref"; logline "DONE $id -> $ref"
+  u=""; if [ -f "$H/.cost/claim-$id.snap" ]; then
+    read -r o0 i0 < "$H/.cost/claim-$id.snap"; read -r o1 i1 <<EOF
+$(cost_sum)
+EOF
+    u=" (usage: out $(kfmt $(( ${o1:-0} - ${o0:-0} ))), in $(kfmt $(( ${i1:-0} - ${i0:-0} ))))"; fi
+  setcol "$id" owner "@$ME"; setcol "$id" status "done"; setcol "$id" ref "$ref"; logline "DONE $id -> $ref$u"
   save "done $id" "DONE $id" ;;
 
 add)
@@ -886,7 +913,9 @@ config)
       for kv in $kvs; do k=${kv%%=*}; v=${kv#*=}
         cfg_def "$k" >/dev/null || die "hk: unknown setting '$k' (see hk config show)"
         cfg_ok "$k" "$v" || die "hk: bad value for $k: '$v'"; done
-      mode_publish "$kvs" "CONFIG $what (by @$ME)" ;;
+      mode_publish "$kvs" "CONFIG $what (by @$ME)"; rc=$?
+      case " $kvs " in *" lean="*|*" profile="*) apply_lean; echo "lean: $(cfg lean) (Claude Code settings follow from your next session)";; esac
+      exit $rc ;;
     *) die "usage: hk config show | get <key> | set k=v ... | profile sprint|crunch|careful" ;;
   esac ;;
 
@@ -906,6 +935,7 @@ session-start) # SessionStart hook: where the plugin lives, rules, clock, team n
   [ "$(cat "$H/.plugin-root" 2>/dev/null)" = "$PLUGIN" ] || printf '%s\n' "$PLUGIN" > "$H/.plugin-root"
   rm -f "${H:?}/.off"   # we're running, so the plugin is enabled again
   [ -f "$H/.paused" ] && exit 0
+  apply_lean
   src=""; [ -t 0 ] || src=$(tmo 2 cat | tr '\n' ' ' | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p')
   bash "$SELF" rules
   clock_line
@@ -919,6 +949,7 @@ rules) # the active rule set (injected at session start and after /compact)
   cat "$RD/core.md"
   if [ "$(eff_demo)" = off ]; then cat "$RD/build-properly.md"; else cat "$RD/demo-first.md"; fi
   cat "$RD/always.md"
+  [ "$(cfg lean)" = on ] && cat "$RD/lean.md"
   inited && cat "$RD/team.md"
   { auto_on || { s=$(mode_get solo); [ -n "$s" ] && [ "$s" != - ]; }; } && cat "$RD/autonomous.md"
   exit 0 ;;
@@ -944,7 +975,39 @@ _cost) # Stop hook (background): token usage of this session and its subagents, 
           for (k in i) printf "%s\t%d\t%d\t%d\t%d\n", k, i[k], w[k], c[k], o[k] }' > "$H/.cost/$sid.tsv.tmp" && mv "$H/.cost/$sid.tsv.tmp" "$H/.cost/$sid.tsv"
   exit 0 ;;
 
+flail) # PostToolUseFailure hook (Bash): the same command failing twice -> escalate instead of a third blind try
+  [ "$(cfg lean)" = on ] || exit 0
+  input=""; [ -t 0 ] || input=$(tmo 2 cat)
+  key=$(flail_key "$input") || exit 0; f=$H/.flail/$(flail_sid "$input"); mkdir -p "$H/.flail"
+  n=$(awk -v k="$key" '$1 == k { n = $2 } END { print n + 1 }' "$f" 2>/dev/null || echo 1)
+  { grep -v "^$key " "$f" 2>/dev/null; echo "$key $n"; } > "$f.tmp"; mv "$f.tmp" "$f"
+  [ "$n" -eq 2 ] && json_ctx PostToolUseFailure "FLAIL GUARD: this command has now failed twice. No third blind try: hand build/type/lint errors to the build-fixer agent (/hackathon:build-fix), anything else to the deep agent with a brief (the error, file:line, what you tried), or log hk log \"BLOCKED <what>\" and tell the human."
+  exit 0 ;;
+
+map|_map) # .hackathon/MAP.md: one line per tracked file with the names it defines/exports (no model tokens; post-commit refreshes it)
+  [ "$CMD" = _map ] && [ "$(cfg lean)" != on ] && exit 0
+  [ -d "$H" ] || die "hk: no .hackathon here"
+  out=$H/MAP.md; tmp=$out.tmp.$$
+  { echo "# Code map (generated by hk map after each commit; read this before searching)"
+    gm ls-files -z | tr '\0' '\n' | grep -vE '^\.hackathon/|(^|/)(node_modules|dist|build|\.next|vendor)/|\.(png|jpe?g|gif|svg|ico|webp|mp4|woff2?|ttf|otf|lock|map|min\.js|pdf|zip)$|(^|/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$' \
+      | while IFS= read -r f; do [ -f "$ROOT/$f" ] && printf '%s\n' "$f"; done > "$tmp.files"
+    total=$(wc -l < "$tmp.files" | tr -d ' ')
+    head -n 150 "$tmp.files" | while IFS= read -r f; do
+      n=$(awk 'FNR > 400 { exit }
+        /^export (default )?(async )?(function|const|let|class|type|interface|enum) [A-Za-z0-9_$]+/ || /^(async )?def [A-Za-z0-9_]+/ || /^class [A-Za-z0-9_]+/ || /^(async )?function [A-Za-z0-9_$]+/ {
+          line = $0; sub(/\(.*/, "", line); sub(/[:=<{].*/, "", line); k = split(line, w, " "); nm = w[k]
+          if (nm != "" && !(nm in seen)) { seen[nm] = 1; out = out (out == "" ? "" : ", ") nm; c++ } if (c >= 8) exit }
+        END { print out }' "$ROOT/$f" 2>/dev/null)
+      if [ -n "$n" ]; then printf -- '- %s: %s\n' "$f" "$n"; else printf -- '- %s\n' "$f"; fi
+    done
+    [ "$total" -gt 150 ] && echo "- ... and $((total - 150)) more files (git ls-files)"
+  } > "$tmp"; rm -f "$tmp.files"; mv "$tmp" "$out"
+  [ "$CMD" = map ] && echo "wrote .hackathon/MAP.md ($(($(wc -l < "$out") - 1)) lines)"; exit 0 ;;
+
 cost)
+  if [ "${1:-}" = --tasks ]; then [ -f "$WT/LOG.md" ] || die "hk: no board yet"
+    echo "USAGE PER TASK (from DONE lines; claim to done, all of that person's sessions):"
+    grep ' DONE .*(usage: ' "$WT/LOG.md" | sed 's/^/  /'; exit 0; fi
   fmt(){ awk -v n="$1" 'BEGIN { if (n >= 1e6) printf "%.1fM", n / 1e6; else if (n >= 1e3) printf "%.0fk", n / 1e3; else printf "%d", n }'; }
   if [ "${1:-}" = --team ]; then need; lock; state_pull >/dev/null 2>&1; ensure_layout; touch_seen; echo "TEAM USAGE (latest per person; updated whenever they use the board or commit):"
     awk -F'|' 'NR > 2 && $2 ~ /@/ { k = $2; v = $3; gsub(/^ +| +$/, "", k); gsub(/^ +| +$/, "", v)

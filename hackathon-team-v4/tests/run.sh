@@ -781,6 +781,68 @@ if [ -f "$V3/install.sh" ]; then
   eq "second run: nothing left" "$(HK_ROOT="$T/old3" bash "$HARN/bin/hk" migrate-v3 | head -n1)" "v3 harness files: none"
 else echo "  (skipped: no v3 folder next to v4)"; fi
 
+echo "# v4.1: lean (build-stage usage)"
+eq "lean on by default (sprint)" "$(hk qa config get lean)" on
+has "lean rules injected" "$(hk qa rules)" "Lean build"
+o=$(hk qa config profile careful); has "careful: lean off" "$(hk qa config get lean)" off; hasnt "careful: no lean rules" "$(hk qa rules)" "Lean build"
+hk qa config profile crunch >/dev/null; eq "crunch: lean on" "$(hk qa config get lean)" on; hk qa config profile sprint >/dev/null
+eq "bad lean value refused" "$(hkrc qa config set lean=maybe)" 1
+SL="$T/qa/.claude/settings.local.json"; rm -f "$SL" "$T/qa/.hackathon/.lean-applied"
+mkdir -p "$T/qa/.claude"; printf '{"permissions":{"allow":["Bash(make *)"]},"env":{"FOO":"1","MAX_MCP_OUTPUT_TOKENS":"20000"}}\n' > "$SL"
+hk qa session-start </dev/null >/dev/null
+eq "lean on: bash output capped" "$(node -p 'require(process.argv[1]).bashOutputMaxChars' "$SL")" 10000
+eq "lean on: unnamed subagents on Haiku" "$(node -p 'require(process.argv[1]).env.CLAUDE_CODE_SUBAGENT_MODEL' "$SL")" haiku
+eq "lean on: Sonnet effort pinned high" "$(node -p 'require(process.argv[1]).effortLevel' "$SL")" high
+eq "lean on: your own value wins" "$(node -p 'require(process.argv[1]).env.MAX_MCP_OUTPUT_TOKENS' "$SL")" 20000
+eq "lean on: your other settings kept" "$(node -p 'require(process.argv[1]).permissions.allow[0]+require(process.argv[1]).env.FOO' "$SL")" "Bash(make *)1"
+has "config set lean=off says when it applies" "$(hk qa config set lean=off)" "from your next session"
+eq "lean off: our keys removed" "$(node -p 'const j=require(process.argv[1]); [j.bashOutputMaxChars,j.effortLevel,j.env.CLAUDE_CODE_SUBAGENT_MODEL].join(",")' "$SL")" ",,"
+eq "lean off: yours kept" "$(node -p 'const j=require(process.argv[1]); j.env.FOO+j.env.MAX_MCP_OUTPUT_TOKENS+j.permissions.allow[0]' "$SL")" "120000Bash(make *)"
+fetchnow qb; hk qb sync >/dev/null; rm -f "$T/qb/.hackathon/.lean-applied"; hk qb session-start </dev/null >/dev/null
+eq "teammate follows lean=off" "$(node -p 'String(require(process.argv[1]).bashOutputMaxChars)' "$T/qb/.claude/settings.local.json" 2>/dev/null || echo undefined)" undefined
+hk qa config set lean=on >/dev/null; eq "lean back on" "$(node -p 'require(process.argv[1]).bashOutputMaxChars' "$SL")" 10000
+# flail guard
+fl(){ printf '{"session_id":"sf","tool_name":"Bash","tool_input":{"command":"%s"},"error":"exit 1"}' "$2" | hk "$1" flail; }
+eq "flail: first failure is silent" "$(fl qa 'npm run build 2>&1 | tail -40')" ""
+has "flail: second identical failure escalates" "$(fl qa 'npm run build 2>&1 | tail -40')" "FLAIL GUARD"
+has "flail: valid hook JSON" "$(fl qa 'npm run build 2>&1 | tail -40' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s||"{}").hookSpecificOutput?"json":"nojson"))' 2>&1)" json
+fl qa 'npx tsc --noEmit' >/dev/null; eq "flail: other commands counted separately" "$(fl qa 'npx tsc --noEmit' | grep -c FLAIL)" 1
+printf '{"session_id":"sf","tool_name":"Bash","tool_input":{"command":"npx tsc --noEmit"}}' | hk qa posttool >/dev/null
+eq "flail: a success resets the count" "$(fl qa 'npx tsc --noEmit')" ""
+eq "flail: numbers normalised (same command, other port)" "$(fl qa 'curl localhost:3001/x'; fl qa 'curl localhost:3002/x' | grep -c FLAIL)" 1
+eq "flail: not Bash, silent" "$(printf '{"session_id":"sf","tool_name":"Edit","tool_input":{}}' | hk qa flail)" ""
+hk qa config set lean=off >/dev/null; fl qa 'make x' >/dev/null; eq "flail: silent when lean is off" "$(fl qa 'make x')" ""; hk qa config set lean=on >/dev/null
+hk qa pause >/dev/null; fl qa 'make y' >/dev/null; eq "flail: silent when paused" "$(fl qa 'make y')" ""; hk qa resume >/dev/null
+# code map
+mkdir -p "$T/qa/src/lib"; printf 'export default function Page() {}\nexport const revalidate = 60\n' > "$T/qa/src/page.tsx"
+printf 'export async function getLinks(id: string) {}\nexport type Link = { id: string }\nfunction helper() {}\n' > "$T/qa/src/lib/db.ts"
+printf 'def shorten(url):\n    pass\nclass Store:\n    pass\n' > "$T/qa/api.py"; printf 'x' > "$T/qa/logo.png"
+(cd "$T/qa" && git add src api.py logo.png && git commit -qm "app" >/dev/null 2>&1)
+has "map: writes MAP.md" "$(hk qa map)" "wrote .hackathon/MAP.md"; M=$(cat "$T/qa/.hackathon/MAP.md")
+has "map: exports listed" "$M" "src/page.tsx: Page, revalidate"; has "map: typed exports" "$M" "src/lib/db.ts: getLinks, Link, helper"
+has "map: python defs" "$M" "api.py: shorten, Store"; hasnt "map: binaries skipped" "$M" "logo.png"; hasnt "map: harness files skipped" "$M" ".hackathon/PLAN.md"
+for i in $(seq 1 160); do printf 'x\n' > "$T/qa/src/f$i.txt"; done; (cd "$T/qa" && git add src && git commit -qm many >/dev/null 2>&1)
+hk qa map >/dev/null; has "map: capped with a pointer" "$(cat "$T/qa/.hackathon/MAP.md")" "more files (git ls-files)"
+[ "$(wc -l < "$T/qa/.hackathon/MAP.md")" -le 152 ] && ok "map: at most ~150 lines" || no "map: at most ~150 lines"
+rm -f "$T/qa/.hackathon/MAP.md"; (cd "$T/qa" && git commit -q --allow-empty -m "beat" && sleep 2); [ -f "$T/qa/.hackathon/MAP.md" ] && ok "map: post-commit refreshes it" || no "map: post-commit refreshes it"
+eq "map: MAP.md is gitignored" "$(cd "$T/qa" && git check-ignore -q .hackathon/MAP.md && echo yes)" yes
+# usage per task
+hk qa add t-lean "files: src/page.tsx; done: smoke green" >/dev/null; hk qa claim t-lean >/dev/null
+has "claim snapshots usage" "$(cat "$T/qa/.hackathon/.cost/claim-t-lean.snap")" " "
+printf '%s\n' '{"type":"assistant","message":{"id":"msg_9","model":"claude-sonnet-5-5","usage":{"input_tokens":1000,"cache_creation_input_tokens":2000,"cache_read_input_tokens":40000,"output_tokens":3000}}}' > "$T/tx/s9.jsonl"
+(cd "$T/qa" && printf '{"session_id":"s9","transcript_path":"%s"}' "$T/tx/s9.jsonl" | bash .hackathon/bin/hk _cost)
+hk qa done t-lean src/page.tsx:1 >/dev/null
+has "done: usage on the DONE line" "$(git -C "$T/r6.git" show hackathon-state:LOG.md | grep 'DONE t-lean')" "(usage: out 3k, in 43k)"
+has "cost --tasks lists it" "$(hk qa cost --tasks)" "DONE t-lean"
+has "done replaces the card with the pointer" "$(git -C "$T/r6.git" show hackathon-state:BOARD.md | grep t-lean)" "src/page.tsx:1"
+# commands and agents
+has "builder agent exists" "$(cat "$HARN/agents/builder.md")" "name: builder"
+has "handoff offers a fresh context" "$(cat "$HARN/commands/handoff.md")" "Safe to /clear now"
+has "claim hands tasks to builder in autonomous mode" "$(cat "$HARN/commands/claim.md")" "builder"
+has "slice adds a smoke script" "$(cat "$HARN/commands/slice.md")" "smoke"
+has "kickoff names a scaffold command" "$(cat "$HARN/commands/kickoff.md")" "scaffold command"
+has "flail hook registered" "$(cat "$HARN/hooks/hooks.json")" "PostToolUseFailure"
+
 echo "# v4: the launcher finds the plugin"
 git clone -q "$T/r6.git" "$T/qc"; rm -f "$T/qc/.hackathon/.plugin-root"
 mkdir -p "$T/fakehome/.claude/plugins/cache/claudhino/hackathon/4.0.0"; cp -R "$HARN/." "$T/fakehome/.claude/plugins/cache/claudhino/hackathon/4.0.0/"

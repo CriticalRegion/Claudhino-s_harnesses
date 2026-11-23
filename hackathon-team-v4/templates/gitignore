@@ -21,6 +21,9 @@
 .hackathon/.offline
 .hackathon/.fetch.lock/
 .hackathon/.hh/
+.hackathon/.flail/
+.hackathon/.lean-applied
+.hackathon/MAP.md
 CLAUDE.local.md
 .claude/settings.local.json
 .playwright-mcp/
