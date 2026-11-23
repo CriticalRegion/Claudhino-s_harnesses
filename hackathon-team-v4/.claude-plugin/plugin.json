@@ -1,0 +1,22 @@
+{
+  "name": "hackathon",
+  "displayName": "Hackathon team harness",
+  "version": "4.0.0",
+  "description": "Hackathon team harness: per-event setup interview, Opus ideation and lean planning, demo-first rules (toggleable), deadline clock, git-based team board with mid-task events and idle wake-ups, autonomous and solo modes, Discord feed, usage log. Pause or disable per project.",
+  "author": {
+    "name": "CriticalRegion"
+  },
+  "homepage": "https://github.com/CriticalRegion/Claudhino-s_harnesses",
+  "repository": "https://github.com/CriticalRegion/Claudhino-s_harnesses",
+  "keywords": [
+    "hackathon",
+    "team",
+    "coordination",
+    "hooks",
+    "agents",
+    "demo"
+  ],
+  "engines": {
+    "claude-code": ">=2.1.324"
+  }
+}

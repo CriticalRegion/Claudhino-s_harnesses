@@ -1,4 +1,7 @@
 # Hackathon Team Harness (v3)
+
+> **Legacy.** [hackathon-team-v4](../hackathon-team-v4/) (a Claude Code plugin: setup interview, pause/off per project, guard and monitor) is the recommended version. v3 still works and is still tested; `/hackathon:setup` upgrades a v3 project.
+
 Claude Code config for hackathons: demo-first rules, a deadline clock, cheap research agents, and git-based coordination for 2-4 people each running their own agent. New in v3: **event notifications**. A teammate's DONE on a task you depend on, an ASK to you, or a contract change reaches your agent mid-task or wakes it when idle, as one line, with no agent-to-agent chat. Details in [GUIDE.md](GUIDE.md), changes in [section 9](GUIDE.md#9-changes-from-v2).
 
 ## Install (Claude Code >= 2.1.324, node, git, bash; on Windows, Git for Windows)

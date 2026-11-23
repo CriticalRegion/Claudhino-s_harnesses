@@ -4,76 +4,57 @@
 
 Claude Code harnesses: drop-in project configs (rules, hooks, agents, slash commands, MCP servers) tuned for a specific kind of work. Each harness lives in its own folder and is self-contained.
 
-## Current: [`hackathon-team-v3`](hackathon-team-v3/)
+## Current: [`hackathon-team-v4`](hackathon-team-v4/) (Claude Code plugin)
 
-A Claude Code setup for hackathon teams of 2-4 people, each running their own agent. It keeps agents on the demo path, watches the clock, and coordinates the team through git, so agents share **events, not conversation**.
+A Claude Code plugin for hackathon teams of 1-4 people, each running their own agent. It keeps agents on the demo path, watches the clock, and coordinates the team through git, so agents share **events, not conversation**. It's **toggleable per project**: pause it instantly, or turn it off and Claude is normal again.
 
 **What it does**
-- **Demo-first rules, toggleable:** by default agents build only the demo path, vertical slice first, faking what judges can't see (tagged `FAKE:` so the pitch stays honest). `hk.sh demo-first off` switches the whole team to build-it-properly rules (complete features, no fakes, error handling, tests) and back.
-- **Research before, memory after:** `/research <event URL>` builds a one-page brief (sponsors' newest tech, judges, criteria, least-crowded tracks, past winners, ideas to avoid, 3 winning angles). After judging, `/postmortem` saves one-line lessons on your machine, and every future `/kickoff` reads them, so each hackathon starts smarter than the last.
-- **Smarter kickoff:** `/kickoff` generates 5 ideas, drops ones that already exist, scores the rest on originality, real-world problem, sponsor tech and demo-to-effort, then scaffolds, deploys and splits the work into board tasks with dependencies.
-- **Deadline clock:** time left is injected into context; under 4h the agent polishes, under 1h it freezes features.
-- **Team board on its own git branch:** claim tasks (the remote is the lock, so simultaneous claims have exactly one winner), log events, record decisions. It never pushes, pulls or rebases your code, and it works offline (queued, pushed later).
-- **Event notifications:** a teammate's `DONE` on a task you depend on, an `ASK` to you, or a contract change reaches your agent **mid-task** or **wakes it when idle**, as one line (~20-40 tokens). Everything else waits for your next prompt.
-- **Guards:** one ASK/ANSWER round trip, then it escalates to the humans; the first edit of a teammate's claimed or owned file is refused with a warning; stale claims can be taken over; contract changes are announced; pushes to main must pass `npm run check` and a Python syntax check.
-- **Autonomous mode** (`hk.sh auto on 2h`, humans only): agents approve their own prompts, except anything that can destroy work (`reset --hard`, `clean`, `restore`, recursive `rm`, `sudo`, piping into a shell) or change the team's modes, which is refused (the safety deny list also still applies), never stop to ask, and keep working through the board until the work runs out, with a time budget, stuck detection and a team-wide kill switch (`hk.sh auto off`).
-- **Solo mode** (`hk.sh solo @alice`): for the endgame, one agent finishes alone with free rein over the repo while everyone else's agent is muted.
-- **Discord feed:** set a Forum channel's webhook once per machine (`hk.sh discord <url> --global`); every hackathon then gets its own forum post automatically, and each event appears as one line with an emoji, under the teammate's name. No bot, no per-event setup.
-- **Demo health:** `/demo-check` walks the demo path in a real browser after deploys and logs `DEMO GREEN` / `DEMO RED` for the team; the `judge` agent scores the demo against the judging criteria before submission.
-- **Token-lean by design:** ponytail (minimal code), a Haiku `scout` for lookups, terse rules, zero tokens when nothing changed, read-deny rules for `node_modules`, build output, lockfiles and `.env` files.
-- **Safe install:** `install.sh` merges into your repo (`.gitignore`, `.gitattributes`, `CLAUDE.md`, `.mcp.json`, settings) and never overwrites your files; pinned plugin and MCP versions.
-- **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash); 255 end-to-end tests run in CI on all three, and the event, autonomous and solo features were verified in live Claude Code sessions.
+- **Setup interview per event** (`/hackathon:setup`): the event, deadline, judging criteria and weights, team; a profile (**sprint**, **crunch**, **careful**) and any of ~25 toggles, shared by the whole team through the board.
+- **Opus ideation, you pick** (`/hackathon:kickoff`): 8-10 ideas from different angles, web-checked for "already exists", scored by a strict Opus `judge` on the weighted criteria; you choose from the top 3; then a lean plan and the first task. **Switchable**: already have an idea? `hk config set ideation=off` (setup asks) and kickoff just plans yours. `/hackathon:pivot` switches to a runner-up later.
+- **Demo-first rules, switchable** to build-it-properly; a **deadline clock** that moves agents into polish and feature freeze; rules injected only when active (never in your CLAUDE.md).
+- **Team board on its own git branch**: claims with one winner, dependencies, offline queueing; it never touches your code.
+- **Live events**: a teammate's `DONE` on a task you depend on, an `ASK` to you, or a contract change reaches your agent **mid-task** or **wakes it when idle**, as one line. Loop guard, collision guard, stale-claim takeover, contract alerts.
+- **Autonomous mode** and **solo mode** (humans switch them on; a kill switch that works offline); a **`deep`** agent hands hard problems to Opus.
+- **Guard, monitor, stop check, handoff across `/compact`, status line, security scan**, from the team's hybrid-v1, each a setting (guard and stop check on in the careful profile).
+- **Discord feed** (one forum post per hackathon, under each person's name), **usage log** by model and per teammate, **research** before and **postmortem lessons** after every event.
+- **Runs on** Linux, macOS and Windows (Git Bash). 538 end-to-end tests in CI on all three; setup, kickoff, pause/resume and a plugin-less session checked live in Claude Code.
 
-**Set up in one paste**
+**Install once per machine**, in Claude Code:
+```
+/plugin marketplace add CriticalRegion/Claudhino-s_harnesses
+/plugin install hackathon@claudhino
+```
+**Every hackathon**, in your project: `/hackathon:setup`, then `/hackathon:kickoff`. Teammates install the plugin and run `/hackathon:setup` (it only asks their name and Discord).
 
-Paste this into Claude Code (or any coding agent) opened in your project folder. It works for the person setting up the project and for teammates joining it.
+**Set up in one paste** (for a teammate's agent, or if you'd rather not type the commands):
 
 ````text
-Set up the Claudhino hackathon harness (v3) in this project. Do the steps in order and ask me
-for anything you need; don't guess names, URLs or dates.
-
-1. Check this folder is a git repo with at least one commit. If not, stop and tell me.
-2. If .hackathon/bin/hk.sh already exists, a teammate already installed the harness: skip to step 5.
-3. Clone https://github.com/CriticalRegion/Claudhino-s_harnesses into a temporary folder outside
-   this repo, then run: bash <that folder>/hackathon-team-v3/install.sh "$(pwd)"
-   Show me the installer's summary (added / merged / skipped files).
-4. Commit the harness files ("hackathon harness"). Ask me before pushing; push only if I say yes.
-5. Ask me for my team handle (short, lowercase, e.g. "alice"), then run:
-   bash .hackathon/bin/hk.sh init <handle>
-   (this creates or joins the team board, a separate "hackathon-state" branch on the remote; it never pushes code)
-6. Ask me for the hackathon deadline in local time. If .hackathon/deadline still contains
-   YYYY-MM-DD, write it as YYYY-MM-DDTHH:MM (nothing else in the file) and commit it.
-7. Discord (optional): ask me whether I have a Discord webhook URL for a Forum channel.
-   If I give you one, run: bash .hackathon/bin/hk.sh discord <url> --global
-   Treat the URL as a secret: never write it into any file in this repo, a commit, or a message.
-   Ask me before running: bash .hackathon/bin/hk.sh discord test   (it posts to the channel).
-8. Run bash .hackathon/bin/hk.sh sync and bash .hackathon/bin/hk.sh auto status and show me the output.
-9. Finish with what I still have to do myself:
-   - restart Claude Code here and accept the trust dialog and the ponytail plugin prompt,
-   - run /mcp and sign in to github and vercel,
-   - if I'm the first on the team: share the repo, and DM teammates the Discord webhook URL,
-   - next step: /kickoff <brief, theme, deadline, team size>.
-Don't turn on autonomous or solo mode, and don't change any other settings.
+Set up the Claudhino hackathon harness (v4 plugin) for this project.
+1. If the /hackathon:setup command isn't available, tell me to run these two commands myself in
+   Claude Code and stop:  /plugin marketplace add CriticalRegion/Claudhino-s_harnesses
+                          /plugin install hackathon@claudhino
+2. Otherwise run /hackathon:setup and follow its interview with me. Ask me every question it asks;
+   don't assume answers. Don't turn on autonomous or solo mode.
 ````
 
-**Manual install instead:** `git clone https://github.com/CriticalRegion/Claudhino-s_harnesses && bash Claudhino-s_harnesses/hackathon-team-v3/install.sh /path/to/your-repo`, commit and push, then each teammate runs `bash .hackathon/bin/hk.sh init <name>`, starts `claude` once to accept the trust dialog, and signs in to GitHub and Vercel with `/mcp`.
+Short docs: [hackathon-team-v4/README.md](hackathon-team-v4/README.md). Full guide (every setting, tuning, troubleshooting, what was tested): [hackathon-team-v4/GUIDE.md](hackathon-team-v4/GUIDE.md).
 
-**Flow:** `/kickoff <brief>` → `/slice` (repeat) → `/demo-check` after deploys → `/cut` when behind → `/ship` in the last hour. Team: `/sync`, `/claim <id>`, `/handoff <id> <path:line>`.
+## Legacy: [`hackathon-team-v3`](hackathon-team-v3/)
 
-Short docs: [hackathon-team-v3/README.md](hackathon-team-v3/README.md). Full guide (every piece, tuning, troubleshooting, what was tested): [hackathon-team-v3/GUIDE.md](hackathon-team-v3/GUIDE.md).
+The same harness as files copied into your repo (`install.sh`), at v3.1. Still works and is still tested in CI, but it's always on in a project (no pause/off), has no setup interview, and lacks the guard, monitor and stop check. A v3 project upgrades to v4 with `/hackathon:setup` (it offers to remove the copied files). Docs: [hackathon-team-v3/README.md](hackathon-team-v3/README.md).
 
 ## Deprecated
 
-Kept for reference only; they get no fixes. Use v3.
+Kept for reference only; they get no fixes. Use v4.
 
 | Folder | Why it's deprecated |
 |---|---|
-| [`hackathon-team-v2`](hackathon-team-v2/) | Superseded by v3, which adds event notifications and macOS/Windows fixes. A v2 board upgrades in place: install v3 over it and run `hk.sh sync`. |
+| [`hackathon-team-v2`](hackathon-team-v2/) | Superseded by v3 and v4 (event notifications, macOS/Windows fixes, the plugin). A v2 board upgrades in place: `/hackathon:setup` in the project. |
 | [`hackathon-team-v1`](hackathon-team-v1/) | Known bugs: board commands push unfinished code to main and report success when offline, and its `cp -r` install overwrites your README and `.gitignore` ([details](hackathon-team-v2/GUIDE.md#9-changes-from-v1)). |
 
 ## Conventions for adding a harness or a variant
 
-- One folder per harness, named `<purpose>-<variant>-v<N>`, e.g. `hackathon-solo-v1`, `hackathon-team-v4`. Don't edit an old version in place when making a breaking change; add a new folder and move the old one to the Deprecated table.
+- One folder per harness, named `<purpose>-<variant>-v<N>`, e.g. `hackathon-solo-v1`, `hackathon-team-v5`. Plugins are listed in `.claude-plugin/marketplace.json` (marketplace `claudhino`). Don't edit an old version in place when making a breaking change; add a new folder and move the old one to the Deprecated table.
 - Each folder contains the files exactly as they should land in a user's repo (`CLAUDE.md`, `.claude/`, `.mcp.json`, ...), plus:
   - `README.md`: install in under 20 lines.
   - `GUIDE.md`: what every piece does, why, how to tune it, troubleshooting, and known limits.
