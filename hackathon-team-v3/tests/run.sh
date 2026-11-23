@@ -329,6 +329,9 @@ waitfor 'grep -c "plain thing" "$T/posts2" | grep -q 2' 40 && ok "text channel: 
 waitfor 'git -C "$T/r3.git" show hackathon-state:MODE.md | grep -q "| discord_thread | plain |"' 40 && ok "remembers it's a text channel" || no "plain remembered"
 hk vc log "BLOCKED plain again" >/dev/null; waitfor 'grep -q "plain again" "$T/posts2"' 40
 hasnt "later posts skip the forum attempt" "$(grep "plain again" "$T/posts2")" "thread_name"
+has "discord test reports delivery" "$(hk vc discord test)" "delivered"
+kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
+has "discord test reports failure" "$(hk vc discord test)" "refused"
 has "discord off" "$(hk vc discord off)" "off"
 else echo "  (skipped: no working python for the fake webhook)"; fi
 

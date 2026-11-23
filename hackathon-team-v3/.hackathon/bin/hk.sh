@@ -491,12 +491,13 @@ _post) # Discord webhook post (background). Mentions are disabled so nobody gets
       else if ($3 == "NOTE") e = "📝"; else if ($3 == "CONTRACT-CHANGED") e = "📜"; else if ($3 == "DEMO") e = ($4 == "RED") ? "🔴" : "🟢";
       else if ($3 == "AUTO") e = "🤖"; else if ($3 == "SOLO") e = "🎯"; else if ($3 == "STUCK") e = "🧱";
       if (NR <= 15) print e " " substr($0, 1, 300) }')
-  who=$(printf '%s' "${ME:-hk}" | tr -d '@#:`' | sed 's/[Dd][Ii][Ss][Cc][Oo][Rr][Dd]//g; s/[Cc][Ll][Yy][Dd][Ee]//g'); [ -n "$who" ] || who=hk
+  who=${ME:-$(gm config user.name 2>/dev/null | tr 'A-Z ' 'a-z-')}
+  who=$(printf '%s' "${who:-hk}" | tr -d '@#:`' | sed 's/[Dd][Ii][Ss][Cc][Oo][Rr][Dd]//g; s/[Cc][Ll][Yy][Dd][Ee]//g'); [ -n "$who" ] || who=hk
   base="\"content\":\"$(jesc "$text")\",\"username\":\"$who\",\"allowed_mentions\":{\"parse\":[]}"
   sep='?'; case $url in *\?*) sep='&';; esac
   tid=""; bad=""; inited && tid=$(mode_get discord_thread)
   case $tid in
-    plain) dpost "$url" "{$base}" >/dev/null; exit 0 ;;
+    plain) case $(dpost "$url" "{$base}" | tail -n1) in 2*) exit 0;; *) exit 1;; esac ;;
     ''|-) ;;
     *) r=$(dpost "$url${sep}thread_id=$tid" "{$base}"); case $(printf '%s' "$r" | tail -n1) in 2*) exit 0;; esac
        [ -n "${HK_POST_RETRY:-}" ] && exit 0; bad=$tid; tid=""   # post deleted? make a new one (once)
@@ -516,7 +517,8 @@ _post) # Discord webhook post (background). Mentions are disabled so nobody gets
         case $(printf '%s' "$r" | tail -n1) in 2*) tid=plain;; *) tid="";; esac ;;
     *) tid="" ;;
   esac
-  if [ $locked = 1 ] && [ -n "$tid" ]; then
+  [ -n "$tid" ] || exit 1
+  if [ $locked = 1 ]; then
     upsert MODE.md discord_thread "$tid"; g add -A && g commit -qm "discord ($ME)" >/dev/null && publish >/dev/null 2>&1; fi
   exit 0 ;;
 
@@ -631,7 +633,9 @@ discord)
     off) if [ $glob = 1 ]; then rm -f "$GCONF/discord"; echo "discord: machine-wide URL removed"
          else echo off > "$H/.discord"; echo "discord: off for this project (a machine-wide URL is ignored here)"; fi ;;
     test) discord_url >/dev/null || die "discord: not set. $usage"
-      bash "$SELF" _post "$(stamp) @${ME:-?} hk.sh test message"; echo "discord: test sent (check the channel)" ;;
+      n=${ME:-$(gm config user.name 2>/dev/null | tr 'A-Z ' 'a-z-')}
+      if bash "$SELF" _post "$(stamp) @${n:-me} hk.sh test message"; then echo "discord: test delivered (check the channel)"
+      else die "discord: Discord refused the post or couldn't be reached. Check the URL (hk.sh discord status) and your network."; fi ;;
     status) if [ "$(cat "$H/.discord" 2>/dev/null)" = off ]; then echo "discord: off for this project"
       elif [ -s "$H/.discord" ]; then echo "discord: on (this project's URL)"
       elif [ -s "$GCONF/discord" ]; then echo "discord: on (machine-wide URL in $GCONF/discord)"
