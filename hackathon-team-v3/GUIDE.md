@@ -60,12 +60,14 @@ Created per clone by `hk.sh init` (gitignored, never committed): `.hackathon/sta
 
 | When | Command | What happens |
 |---|---|---|
+| Days before | `/research <event URL>` | Sponsors' newest tech, judges, criteria, tracks, past winners and the ideas everyone will build, into `.hackathon/RESEARCH.md`, ending with 3 angles likely to win. `/kickoff`, `/pitch` and the `judge` agent all use it |
 | Hour 0 | `/kickoff <brief, theme, deadline, team size>` | Generates 5 ideas, drops ones that already exist, scores originality / real problem / sponsor tech / effort, picks one, fills `PLAN.md`, writes the deadline, scaffolds, adds a fast `check` script, deploys hello-world. Team: creates `contracts/` stubs, assigns directory owners, adds board tasks |
 | Hours 1 to ~-4h | `/slice` (repeat) | Builds the earliest unfinished demo-path step (or your claimed task) end to end, starts the dev server if needed, verifies in a browser, commits |
 | Whenever behind | `/cut` | Compares time left to milestones, cuts or fakes, updates the cut list, releases cut tasks |
 | Last hour | `/ship` | Clean deploy, README with honest FAKE list, 2-minute demo script, submission text, runs `judge` |
 | After each deploy | `/demo-check` | Walks the demo path in a real browser and logs `DEMO GREEN` or `DEMO RED: step n ...` for the team |
 | Anytime | `/pitch` | Tagline, 60-second pitch, short submission description |
+| After judging | `/postmortem [result, feedback]` | Writes `.hackathon/POSTMORTEM.md` and saves 3-6 one-line lessons with `hk.sh lesson`. Lessons live on your machine (`~/.config/hackathon-harness/LESSONS.md`) and every future `/kickoff` reads them, so each hackathon starts smarter than the last |
 
 ---
 
@@ -118,7 +120,7 @@ Versions are pinned so `npx` can't pull a changed package during the event. Ever
 
 ### Permissions (`settings.json`)
 - **Allowed without prompting:** git, npm/npx/pnpm, node, python3, ls, grep, curl to localhost, `hk.sh`, context7 and playwright tools. Be clear-eyed: allowing `node`, `python3` and `npx` is effectively allowing any command, so the deny list below is a guard against accidents, not a security boundary.
-- **Asks first:** `git reset --hard`, `git clean`, `git checkout -- …`, `git restore`, `git branch -D` (the ways an agent loses an afternoon of work).
+- **Asks first:** `git reset --hard`, `git clean`, `git checkout -- …`, `git restore`, `git branch -D` (the ways an agent loses an afternoon of work), and switching autonomous or solo mode on. In autonomous mode these are refused rather than auto-approved (see below).
 - **Denied:** reading `node_modules`, `.next`, `dist`, `build` at any depth; lockfiles; `.env`, `.env.local`, `.env.*.local`, `.env.production` (these also block `cat`/`head` of them in Bash); every form of force-push (`--force`, `-f`, `+refspec`); `rm -rf /…` and `rm -rf ~…`.
 - Default model `sonnet`. Switch to `opus` for one hard problem, then back.
 
@@ -203,7 +205,9 @@ For stretches where nobody wants to babysit: agents decide for themselves and ke
 | `hk.sh auto status` | Team setting, your override, and what your agent is doing |
 
 While it's on for your agent:
-- **No permission pauses:** a `PermissionRequest` hook approves every prompt. Deny rules are checked before any prompt, so the deny list (force-push, `rm -rf /`, `.env` reads, large build dirs) still blocks in every mode.
+- **No permission pauses:** a `PermissionRequest` hook approves prompts. Deny rules are checked before any prompt, so the deny list (force-push, `rm -rf /`, `.env` reads, large build dirs) still blocks in every mode.
+- **Except work-destroying and power-widening commands:** `git reset --hard`, `git clean`, `git restore`, `git checkout -- …`, `git branch -D`, any force push, recursive `rm`, `sudo`, piping into a shell, and `hk.sh auto|solo|demo-first` are refused with a reason (take a safer route, or log `BLOCKED needs a human`). Before this, autonomous mode approved them silently, so one bad call could wipe a teammate's uncommitted work.
+- **Only humans switch it on:** `hk.sh auto on` and `hk.sh solo @x` refuse to run inside Claude Code's shell (`CLAUDECODE` is set there) and are on the settings `ask` list, so an agent, including one misled by a web page or file it read, can't grant itself or the team free rein. Agents can still switch it *off*.
 - **No questions:** `AskUserQuestion` is refused with "pick the option you judge best and log it with `hk.sh decide`".
 - **No stopping while work remains:** when the agent ends a turn, the `Stop` hook names the next concrete step: finish your task → claim the next unblocked one → fix `DEMO RED` → `/demo-check` (only if PLAN.md has a URL). When nothing is left, it lets the agent stop.
 - **Escalations become decisions:** an `ESCALATE` addressed to an autonomous asker is urgent for it, and it decides.
@@ -287,7 +291,7 @@ For the end of the event, when one agent should do the remaining small fixes alo
 
 ## 8. What was tested
 
-- `tests/run.sh`: 222 checks against throwaway repos and a local bare remote. Everything from v2 (install/merge, claims and races, offline handling, row merges, WIP isolation, pre-push, Python check, clock) plus, for v3: dependency routing (DONE is urgent only for the dependent task's owner); `posttool` JSON validity, speed and subagent skip; ASK/NOTE/ANSWER mentions; the loop guard logging ESCALATE and never waking; the watcher waking (exit 2) on an urgent event, staying quiet otherwise, replacing an older watcher, and respecting the wake cap with the event still delivered at the next prompt; the collision guard (CLAIM-FILE, owned directory, own directory, refuse-once then retry, `HK_COLLISION=warn`); contract alerts on push to main; post-commit activity beats, STALE display and `--take`; Discord posts to a local fake webhook that behaves like a forum or a text channel (one post per project shared by the team, sender names, machine-wide URL, project `off` overriding it, text-channel fallback remembered, mentions disabled, non-Discord URLs refused); upgrading a v2 board in place; `clock.sh --minutes`; autonomous mode (permit JSON, AskUserQuestion refusal, Stop-hook next steps through a whole board, work-ran-out stop, DEMO RED, no-URL stop, STUCK after 3, per-person override, time budget, AUTO ON/OFF reaching everyone, ESCALATE to an autonomous asker); solo mode (solo agent autonomous and unrestricted, others muted but still able to work, human notes still delivered, takeover of any task, SOLO OFF); claims no longer hiding teammates' news.
+- `tests/run.sh`: 254 checks against throwaway repos and a local bare remote. Everything from v2 (install/merge, claims and races, offline handling, row merges, WIP isolation, pre-push, Python check, clock) plus, for v3: dependency routing (DONE is urgent only for the dependent task's owner); `posttool` JSON validity, speed and subagent skip; ASK/NOTE/ANSWER mentions; the loop guard logging ESCALATE and never waking; the watcher waking (exit 2) on an urgent event, staying quiet otherwise, replacing an older watcher, and respecting the wake cap with the event still delivered at the next prompt; the collision guard (CLAIM-FILE, owned directory, own directory, refuse-once then retry, `HK_COLLISION=warn`); contract alerts on push to main; post-commit activity beats, STALE display and `--take`; Discord posts to a local fake webhook that behaves like a forum or a text channel (one post per project shared by the team, sender names, machine-wide URL, project `off` overriding it, text-channel fallback remembered, mentions disabled, non-Discord URLs refused); upgrading a v2 board in place; `clock.sh --minutes`; autonomous mode (permit JSON, AskUserQuestion refusal, Stop-hook next steps through a whole board, work-ran-out stop, DEMO RED, no-URL stop, STUCK after 3, per-person override, time budget, AUTO ON/OFF reaching everyone, ESCALATE to an autonomous asker); solo mode (solo agent autonomous and unrestricted, others muted but still able to work, human notes still delivered, takeover of any task, SOLO OFF); claims no longer hiding teammates' news; autonomous safety (11 destructive or mode-changing commands refused with valid JSON, ordinary commands and file writes still approved, agents unable to switch autonomous or solo on but able to switch it off, the settings `ask` rule); lessons (saved, machine-wide across clones, ordered, count limit) and the installer shipping `/research` and `/postmortem`.
 - A live interactive Claude Code 2.1.325 session (Haiku) in tmux on a sandbox with two teammates: a teammate's NOTE arrived mid-task via `PostToolUse`; an idle agent was woken by a dependency's DONE and replied in one line; the collision guard refused an edit in a teammate's directory before writing; a woken agent answered an ASK with one `ANSWER` line in manual mode, was blocked by the classifier in auto mode (and told its human instead); a follow-up ASK became `ESCALATE` without waking anyone. Two bugs found this way were fixed (agents didn't know their own handle; `PreToolUse` warnings arrived after the edit).
 - shellcheck clean (warning level). Linux only for v3; the v2 parts also passed on macOS.
 - Not tested: macOS and Windows for the v3 hooks, a real Discord server (a local fake webhook was used), the github/vercel MCP sign-in, and a full `/kickoff` -> `/ship` run on a real project.
@@ -295,6 +299,14 @@ For the end of the event, when one agent should do the remaining small fixes alo
 ---
 
 ## 9. Changes from v2
+
+v3.1 (safety + memory):
+- Autonomous mode no longer auto-approves destructive or mode-changing commands, and agents can't switch autonomous or solo mode on (only humans can). See section 4.
+- `/research` (pre-event brief in `.hackathon/RESEARCH.md`) and `/postmortem` + `hk.sh lesson` / `lessons` (lessons kept on your machine across every hackathon). `/kickoff` reads both; `/pitch` and `judge` use the research.
+- `/ship` asks for a 60-90 s backup screen recording of the demo and reminds you to run `/postmortem`.
+- CLAUDE.md: FastAPI and Render named as boring defaults for Python backends.
+
+v3.0:
 
 - Demo-first toggle (`hk.sh demo-first on|off [--me]`): CLAUDE.md split into demo-first / when-off / always rules.
 - Autonomous mode (`hk.sh auto`) and solo mode (`hk.sh solo`): self-approved prompts, no questions, Stop-hook continuation until work runs out, budgets, STUCK detection, kill switch, muting.
