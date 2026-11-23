@@ -23,6 +23,7 @@
 #   solo @name [2h] | off            one agent finishes alone (autonomous); everyone else is muted
 #   demo-first on|off [--me] | clear --me | status
 #                                    off = build features properly (no FAKE stubs, tests, edge cases)
+#   lesson "<text>" | lessons [n]    lessons from past events, kept on this machine across every hackathon
 # Hooks: peek, posttool, pretool, watch (exit 2 = wake the agent), permit, autostop, contract,
 #        _beat, _bgfetch, _mergeboard
 #
@@ -292,6 +293,12 @@ own_lines(){ # my LOG/DECISIONS lines added between $1 and HEAD
   [ -n "$1" ] && g cat-file -e "$1^{commit}" 2>/dev/null || return 0
   g diff -U0 "$1" HEAD -- LOG.md DECISIONS.md 2>/dev/null | grep -E '^\+[0-9]' | sed 's/^+//' | grep "^[0-9:]* @$ME " || true; }
 GCONF=${XDG_CONFIG_HOME:-$HOME/.config}/hackathon-harness
+# Never auto-approved in autonomous mode (see permit): destructive git, recursive rm, sudo, piping downloads into a shell,
+# and the commands that switch the agents' own modes.
+RISKY='git[[:space:]]+(reset[[:space:]]+--hard|clean|restore|checkout[[:space:]]+(--|\.)|branch[[:space:]]+-D|push.*(--force|[[:space:]]-f|[[:space:]]\+))|(^|[;&|[:space:]"])rm[[:space:]]+(-[a-zA-Z]*[rR]|--recursive)|(^|[;&|[:space:]"])sudo[[:space:]]|\|[[:space:]]*(ba|z)?sh([[:space:]"]|$)|hk\.sh[[:space:]]+(auto|solo|demo-first)'
+human_only(){ # modes that widen what agents may do are switched on by humans, not by an agent's own shell
+  [ -n "${CLAUDECODE:-}" ] || return 0
+  die "hk: '$1' must be switched on by a human: run it in your own terminal, not through Claude Code. (Agents may still turn it off.)"; }
 discord_url(){ local u; u=$(cat "$H/.discord" 2>/dev/null || true)
   [ "$u" = off ] && return 1
   [ -n "$u" ] || u=$(cat "$GCONF/discord" 2>/dev/null || true)
@@ -657,7 +664,7 @@ auto)
   me=0; d=10800
   for a in "$@"; do case $a in --me) me=1;; *) d=$(dur "$a") || die "usage: hk.sh auto on [90m|2h] [--me] | off [--me] | clear --me | status";; esac; done
   case $sub in
-    on) need; until=$(( $(now) + d ))
+    on) need; human_only "auto on"; until=$(( $(now) + d ))
       if [ $me = 1 ]; then echo "on $until" > "$H/.auto"; echo "AUTONOMOUS ON for @$ME until $(hm "$until") (this clone only)."
       else mode_publish "auto=on auto_until=$until" "AUTO ON until $(hm "$until") (set by @$ME): agents work without waiting for humans; hk.sh auto off stops them"; fi
       echo "$AUTO_WARN" ;;
@@ -691,7 +698,7 @@ solo)
   who=${1:-}; [ $# -gt 0 ] && shift
   case $who in
     off) mode_publish "solo=- solo_until=0" "SOLO OFF (by @$ME): everyone back to normal; check the board with /sync" ;;
-    @*) printf '%s' "$who" | grep -Eq '^@[a-z0-9][a-z0-9_-]*$' || die "usage: hk.sh solo @name [2h] | off"
+    @*) human_only "solo"; printf '%s' "$who" | grep -Eq '^@[a-z0-9][a-z0-9_-]*$' || die "usage: hk.sh solo @name [2h] | off"
       d=10800; [ $# -gt 0 ] && { d=$(dur "$1") || die "usage: hk.sh solo @name [2h] | off"; }
       need; until=$(( $(now) + d ))
       grep -q "^| $who |" "$WT/SEEN.md" 2>/dev/null || echo "warning: $who hasn't been active on this board yet (typo?)"
@@ -700,10 +707,16 @@ solo)
     *) die "usage: hk.sh solo @name [2h] | off" ;;
   esac ;;
 
-permit) # PermissionRequest hook: in autonomous mode approve the prompt (deny rules never reach here)
+permit) # PermissionRequest hook: in autonomous mode approve the prompt (deny rules never reach here),
+        # except commands that can destroy work or widen the agents' own powers: those are refused with a reason
   inited || exit 0
-  [ -t 0 ] || tmo 2 cat >/dev/null
+  input=""; [ -t 0 ] || input=$(tmo 2 cat)
   auto_on || exit 0
+  if printf '%s' "$input" | grep -q '"tool_name"[[:space:]]*:[[:space:]]*"Bash"' \
+     && printf '%s' "$input" | tr '\n' ' ' | grep -Eq "$RISKY"; then   # whole hook JSON: portable, errs towards refusing
+    printf '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"%s"}}}\n' "AUTONOMOUS MODE: this command can destroy work or change the team modes, so it is never auto-approved. Take a safer route (commit or stash instead of reset/clean/restore, delete single files, leave modes to the humans), or post it for a human: bash .hackathon/bin/hk.sh log BLOCKED needs a human - <what and why>"
+    exit 0
+  fi
   printf '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}\n'
   exit 0 ;;
 
@@ -724,7 +737,17 @@ autostop) # Stop hook: in autonomous mode keep the agent going while work remain
   else printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$json_reason"; fi
   exit 0 ;;
 
+lesson) # remember a lesson on this machine for every future hackathon (read by /kickoff and /research)
+  [ $# -gt 0 ] || die "usage: hk.sh lesson \"<one line: what to do or avoid next time>\""
+  (umask 077; mkdir -p "$GCONF"; printf '%s %s\n' "$(date +%Y-%m-%d)" "$(oneline "$*")" >> "$GCONF/LESSONS.md")
+  echo "lesson saved to $GCONF/LESSONS.md (read by /kickoff at every future hackathon)" ;;
+
+lessons) # print the newest lessons (default 40)
+  n=${1:-40}; case $n in *[!0-9]*|'') die "usage: hk.sh lessons [count]";; esac
+  if [ -s "$GCONF/LESSONS.md" ]; then echo "LESSONS from past hackathons (newest last):"; tail -n "$n" "$GCONF/LESSONS.md"
+  else echo "No lessons yet. After an event, run /postmortem (or hk.sh lesson \"...\")."; fi ;;
+
 board) need; cat "$WT/BOARD.md" ;;
 
-*) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+*) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
