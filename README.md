@@ -22,7 +22,7 @@ A Claude Code setup for hackathon teams of 2-4 people, each running their own ag
 - **Demo health:** `/demo-check` walks the demo path in a real browser after deploys and logs `DEMO GREEN` / `DEMO RED` for the team; the `judge` agent scores the demo against the judging criteria before submission.
 - **Token-lean by design:** ponytail (minimal code), a Haiku `scout` for lookups, terse rules, zero tokens when nothing changed, read-deny rules for `node_modules`, build output, lockfiles and `.env` files.
 - **Safe install:** `install.sh` merges into your repo (`.gitignore`, `.gitattributes`, `CLAUDE.md`, `.mcp.json`, settings) and never overwrites your files; pinned plugin and MCP versions.
-- **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash); 254 end-to-end tests run in CI on all three, and the event, autonomous and solo features were verified in live Claude Code sessions.
+- **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash); 255 end-to-end tests run in CI on all three, and the event, autonomous and solo features were verified in live Claude Code sessions.
 
 **Set up in one paste**
 
