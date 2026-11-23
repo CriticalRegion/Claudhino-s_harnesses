@@ -54,6 +54,13 @@ const ME = () => (rd(path.join(H, '.me')).trim() || env.HK_ME || '').toLowerCase
 const sid = i => String((i && i.session_id) || 'nosession').replace(/[^\w-]/g, '').slice(0, 64) || 'nosession';
 const out = o => process.stdout.write(JSON.stringify(o) + '\n');
 const slash = p => String(p).replace(/\\/g, '/');
+const cygCache = {};
+function nativePath(p) {   // Windows: Git Bash paths (/c/Users/x, /tmp/x) -> C:/... so Node can open them
+  p = String(p || ''); if (process.platform !== 'win32' || !p.startsWith('/')) return p;
+  const m = p.match(/^\/([a-zA-Z])(\/|$)(.*)$/); if (m) return m[1].toUpperCase() + ':/' + m[3];
+  if (!(p in cygCache)) { const r = cp.spawnSync('cygpath', ['-m', p], { encoding: 'utf8', windowsHide: true, timeout: 3000 }); cygCache[p] = r.status === 0 && r.stdout.trim() ? r.stdout.trim() : p; }
+  return cygCache[p];
+}
 function stdin() {
   try { if (process.stdin.isTTY) return {}; const s = fs.readFileSync(0, 'utf8'); return s.trim() ? JSON.parse(s) : {}; }
   catch { return {}; }
@@ -230,10 +237,22 @@ function unwrap(argv) {
 }
 
 // ---------- path classes ----------
+const REAL_ROOT = (() => { try { return fs.realpathSync(ROOT); } catch { return ROOT; } })();
+function realish(abs) {   // realpath of the longest existing prefix (macOS: /var -> /private/var)
+  const tail = []; let p = abs;
+  for (let k = 0; k < 64; k++) {
+    try { return path.join(fs.realpathSync(p), ...tail.reverse()); }
+    catch { const d = path.dirname(p); if (d === p) return abs; tail.push(path.basename(p)); p = d; }
+  }
+  return abs;
+}
 function rel(p, cwd) {
-  let s = String(p || '').trim(); if (!s) return '';
+  let s = nativePath(String(p || '').trim()); if (!s) return '';
   if (s === '~' || s.startsWith('~/')) s = path.join(os.homedir(), s.slice(1));
-  return slash(path.relative(ROOT, path.resolve(cwd || ROOT, s)));
+  const abs = path.resolve(nativePath(cwd) || ROOT, s), out = x => x.startsWith('..') || path.isAbsolute(x);
+  let r = slash(path.relative(ROOT, abs));
+  if (out(r)) { const r2 = slash(path.relative(REAL_ROOT, realish(abs))); if (!out(r2)) r = r2; }
+  return r;
 }
 const SECRET_BASE = /^(\.env(\.(?!example$|sample$|template$|defaults$|dist$|schema$)[\w.-]+)?|\.envrc|.+\.pem|.+\.p12|.+\.pfx|.+\.key|id_(rsa|ed25519|ecdsa|dsa)(\.pub)?|\.npmrc|\.netrc|\.pypirc|\.git-credentials|credentials(\.json)?|service[-_]?account.*\.json|\.htpasswd|\.dev\.vars)$/i;
 function isSecret(tok) {
@@ -252,8 +271,8 @@ const SAFE_DEL = /^(node_modules|\.next|dist|build|out|\.turbo|\.cache|coverage|
 function safeDelTarget(t, cwd) {   // build output, caches and dependency folders inside the project, or temp files outside it
   let s = slash(t).replace(/\/\*$/, ''); if (!s || /[*?]/.test(s)) return false;
   if (s === '~' || s.startsWith('~/')) s = path.join(os.homedir(), s.slice(1));
-  const abs = path.resolve(cwd || ROOT, s), r = slash(path.relative(ROOT, abs));
-  if (abs === path.resolve(ROOT)) return false;
+  const abs = path.resolve(cwd || ROOT, s), r = rel(abs);
+  if (abs === path.resolve(ROOT) || r === '') return false;
   if (r.startsWith('..') || path.isAbsolute(r)) return [os.tmpdir(), '/tmp', '/var/tmp'].some(x => abs.startsWith(path.resolve(x) + path.sep));
   return r.split('/').some(seg => SAFE_DEL.test(seg));
 }
@@ -473,11 +492,11 @@ function analyse(src, ctx, depth, F) {
 }
 function guardFindings(input) {
   const F = [], tool = String(input.tool_name || ''), ti = input.tool_input || {};
-  const cwd = input.cwd || ROOT;
+  const cwd = nativePath(input.cwd) || ROOT;
   if (tool === 'Bash' || tool === 'PowerShell') {
     analyse(String(ti.command || ''), { cwd, background: ti.run_in_background === true, stateCwd: STATE_RE.test(rel(cwd)) }, 0, F);
   } else if (/^(Edit|Write|MultiEdit|NotebookEdit|Read)$/.test(tool)) {
-    const fp = ti.file_path || ti.notebook_path || ti.path || ''; const r = rel(fp, cwd), b = path.basename(slash(fp));
+    const fp = nativePath(ti.file_path || ti.notebook_path || ti.path || ''); const r = rel(fp, cwd), b = path.basename(slash(fp));
     if (tool === 'Read') { if (isSecret(fp)) F.push(['secrets', 'deny', `SECRETS: ${b} holds credentials. Read .env.example for variable names, or ask your human.`]); }
     else {
       const exists = fs.existsSync(path.resolve(cwd, fp));
@@ -526,7 +545,7 @@ const saveSt = (s, o) => wr(stFile(s), JSON.stringify(o));
 function ctxPct(input, s) {
   const st = jread(path.join(HH, s + '.stat'), null);
   if (st && Date.now() - st.t < 300000 && typeof st.pct === 'number') return st.pct;
-  const tp = input.transcript_path; if (!tp) return null;
+  const tp = nativePath(input.transcript_path); if (!tp) return null;
   try {
     const fd = fs.openSync(tp, 'r'), size = fs.fstatSync(fd).size, len = Math.min(size, 400000), buf = Buffer.alloc(len);
     fs.readSync(fd, buf, 0, len, size - len); fs.closeSync(fd);
@@ -546,7 +565,7 @@ function costTotal() { const c = jread(path.join(HH, 'cost.json'), {}); return O
 function post(input) {
   const s = sid(input), tool = String(input.tool_name || ''), ti = input.tool_input || {}, msgs = [];
   if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(tool)) {
-    const fp = ti.file_path || ti.notebook_path; const f = path.join(HH, s + '.edits');
+    const fp = nativePath(ti.file_path || ti.notebook_path); const f = path.join(HH, s + '.edits');
     if (fp && !rd(f).split('\n').includes(fp)) { try { fs.mkdirSync(HH, { recursive: true }); fs.appendFileSync(f, fp + '\n'); } catch {} }
   }
   if (input.agent_id) return;   // subagent: leave warnings to the main agent
@@ -658,7 +677,7 @@ function notify(title, msg) {
 function stop(input) {
   const s = sid(input), st = loadSt(s), ef = path.join(HH, s + '.edits');
   if (!input.agent_id && !off(env.HK_STOP_CHECK)) {
-    const files = [...new Set(rd(ef).split('\n').filter(Boolean))].map(f => path.resolve(input.cwd || ROOT, f)).filter(f => fs.existsSync(f));
+    const files = [...new Set(rd(ef).split('\n').filter(Boolean))].map(f => path.resolve(nativePath(input.cwd) || ROOT, nativePath(f))).filter(f => fs.existsSync(f));
     const errs = files.length ? checkEdited(files) : [];
     if (errs.length) {
       const fp = sha(errs.join('\n'));

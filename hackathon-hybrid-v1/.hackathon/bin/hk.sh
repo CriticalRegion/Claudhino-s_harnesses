@@ -479,6 +479,7 @@ pretool) # before Edit/Write: warn once per file if a teammate claimed it or own
   [ "$(mode_get solo)" = "@$ME" ] && exit 0   # solo: you own the whole repo
   f=$(printf '%s' "$input" | tr '\n' ' ' | sed -n 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
   f=$(printf '%s' "$f" | sed -e 's#\\\\#/#g' -e 's#\\#/#g')   # JSON-escaped and plain backslashes -> /
+  f=$(printf '%s' "$f" | sed -e 's#\([^/]\)//*#\1/#g')   # a//b -> a/b (macOS TMPDIR ends in /), keeping a leading // (UNC)
   case $f in [A-Za-z]:/*)   # Windows drive path -> /c/... like Git Bash's pwd
     if command -v cygpath >/dev/null 2>&1; then f=$(cygpath -u "$f")
     else f="/$(printf '%s' "${f%%:*}" | tr 'A-Z' 'a-z')${f#?:}"; fi;; esac

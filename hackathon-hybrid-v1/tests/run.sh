@@ -298,7 +298,7 @@ open(portf, 'w').write(str(s.server_port)); s.serve_forever()
 PY
 if [ -n "$PY" ]; then
 "$PY" "$T/hook.py" "$T/posts" "$T/port" forum & SRV=$!
-waitfor '[ -s "$T/port" ]'; FAKE="http://127.0.0.1:$(cat "$T/port")/api/webhooks/1/x"
+waitfor '[ -s "$T/port" ]' 120; FAKE="http://127.0.0.1:$(cat "$T/port")/api/webhooks/1/x"
 has "setter rejects non-Discord URLs" "$(hk va discord http://evil.example/x)" "usage"
 echo "$FAKE" > "$T/va/.hackathon/.discord"
 hk va log "BLOCKED waiting on stripe keys" >/dev/null
@@ -322,7 +322,7 @@ has "status shows off" "$(hk vb discord status)" "off for this project"
 rm -f "$T/xdg/hackathon-harness/discord"
 kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null; rm -f "$T/port"
 "$PY" "$T/hook.py" "$T/posts2" "$T/port" plain & SRV=$!
-waitfor '[ -s "$T/port" ]'; echo "http://127.0.0.1:$(cat "$T/port")/api/webhooks/2/y" > "$T/vc/.hackathon/.discord"
+waitfor '[ -s "$T/port" ]' 120; echo "http://127.0.0.1:$(cat "$T/port")/api/webhooks/2/y" > "$T/vc/.hackathon/.discord"
 git -C "$T/vc/.hackathon/state" pull -q --rebase 2>/dev/null
 ( cd "$T/vc/.hackathon/state" && awk -F'|' -v OFS='|' '{k=$2; gsub(/ /,"",k)} k=="discord_thread" {$3=" - "} {print}' MODE.md > m && mv m MODE.md && git commit -qam reset && git push -q origin HEAD:hackathon-state ) 2>/dev/null
 hk vc log "BLOCKED plain thing" >/dev/null
@@ -483,7 +483,7 @@ has "statusline wired" "$(node -p 'require(process.argv[1]).statusLine.command' 
 has "gitignore covers monitor state" "$(cat "$T/seed/.gitignore")" ".hackathon/.hh/"
 git clone -q "$T/remote.git" "$T/h1"; git clone -q "$T/remote.git" "$T/h2"
 hk h1 init hana >/dev/null; hk h2 init hugo >/dev/null
-hh(){ (cd "$T/$1" && shift && node .claude/hooks/hh.js "$@" 2>&1); }
+hh(){ (cd "$T/$1" && shift && MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' node .claude/hooks/hh.js "$@" 2>&1); }   # Git Bash would rewrite /bin/rm in arguments
 hj(){ (cd "$T/$1" && printf '%s' "$3" | node .claude/hooks/hh.js "$2" 2>&1); }
 dec(){ hh h1 check "$1" | cut -f1; }
 echo "# hybrid: guard - attacks from the v3.1 stress test are gated"
