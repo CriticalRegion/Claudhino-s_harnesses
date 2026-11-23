@@ -33,6 +33,16 @@ jobs:
           ln -sf /usr/bin/awk "$RUNNER_TEMP/stock/awk"
           echo "$RUNNER_TEMP/stock" >> "$GITHUB_PATH"
 
+      - name: Plugin version bumped (pull requests that change the plugin)
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        run: |
+          git fetch -q --depth=1 origin "$GITHUB_BASE_REF"
+          if git diff --quiet FETCH_HEAD -- hackathon-team-v4; then echo "plugin unchanged"; exit 0; fi
+          old=$(git show "FETCH_HEAD:hackathon-team-v4/.claude-plugin/plugin.json" 2>/dev/null | grep '"version"' || true)
+          new=$(grep '"version"' hackathon-team-v4/.claude-plugin/plugin.json)
+          echo "base: $old  this PR: $new"
+          [ "$old" != "$new" ] || { echo "::error::hackathon-team-v4 changed but its plugin.json version didn't; bump it so installed copies update"; exit 1; }
+
       - name: Tool versions
         run: |
           bash --version | head -n1
