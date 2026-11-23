@@ -35,7 +35,9 @@
       "Bash(git clean *)",
       "Bash(git checkout -- *)",
       "Bash(git restore *)",
-      "Bash(git branch -D *)"
+      "Bash(git branch -D *)",
+      "Bash(bash .hackathon/bin/hk.sh auto on*)",
+      "Bash(bash .hackathon/bin/hk.sh solo @*)"
     ],
     "deny": [
       "Read(**/node_modules/**)",

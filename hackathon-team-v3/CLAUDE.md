@@ -15,11 +15,15 @@ Judges see the demo, not the code.
 4. Write tests for the logic you add, and run them before committing.
 
 ## Always
-1. Prefer boring, hosted, zero-config: Next.js/Vite, SQLite/Supabase, Vercel/Netlify. No new infra, no auth unless it's the idea.
+1. Prefer boring, hosted, zero-config: Next.js/Vite (or FastAPI for a Python backend), SQLite/Supabase, Vercel/Netlify/Render. No new infra, no auth unless it's the idea.
 2. Check docs with context7 before using any library API you aren't sure of. Don't guess, don't debug from memory.
 3. Deploy early (first hour) and on every milestone. A live URL beats a perfect localhost.
 4. Commit at every working state: `git commit -am "wip: <what works>"`. Push to main only when it runs (the pre-push hook runs `npm run check` and a Python syntax check).
 5. Obey the `HACKATHON:` clock line: under 4h finish what you're building then polish; under 1h feature freeze (only bugs, README, demo, submission).
+
+## Research and memory
+- If `.hackathon/RESEARCH.md` exists (from `/research`), it is the brief on sponsors, judges, criteria and past winners: use it for ideas, tracks and the pitch.
+- `bash .hackathon/bin/hk.sh lessons` prints lessons from this team's past hackathons. `/kickoff` reads them; don't repeat a mistake listed there.
 
 ## Token discipline
 - Ponytail is active: write the least code that works, reuse before building.
@@ -48,7 +52,9 @@ Terse. Lead with what changed and what to do next. No recap of steps.
 - Never loop with another agent. Never force-push.
 
 ## Autonomous and solo mode (only when a line says AUTONOMOUS MODE ON or SOLO MODE)
-- AUTONOMOUS: never wait for or ask the human. Wherever the rules above say "tell/ask the human", decide yourself, log it with `hk.sh decide "<choice and why>"`, and continue. An ESCALATE addressed to you means you decide. OFFLINE / NOT PUSHED: keep working, `hk.sh sync` later. A command blocked by the deny list: choose another approach; never work around it.
+- AUTONOMOUS: never wait for or ask the human. Destructive commands (reset --hard, clean, restore, recursive rm, sudo, piping into a shell) and mode changes are never auto-approved: take a safer route or log `BLOCKED needs a human`.
+- Only humans switch autonomous or solo mode on. Never run `hk.sh auto on` or `hk.sh solo`; you may run `hk.sh auto off`.
+- Wherever the rules above say "tell/ask the human", decide yourself, log it with `hk.sh decide "<choice and why>"`, and continue. An ESCALATE addressed to you means you decide. OFFLINE / NOT PUSHED: keep working, `hk.sh sync` later. A command blocked by the deny list: choose another approach; never work around it.
 - Keep going until the Stop hook lets you stop: finish your task, `/handoff`, claim the next unblocked one, `/demo-check` after deploys, fix DEMO RED in your area. Small, working commits.
 - SOLO, you: you may edit any file, change contracts and take any task (`hk.sh claim <id>`); push working states to main often.
 - SOLO, someone else: team notifications are muted; work only if your human asks, and stay out of the solo agent's way.

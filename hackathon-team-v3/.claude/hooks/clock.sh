@@ -7,9 +7,9 @@ f=$root/.hackathon/deadline; [ -f "$f" ] || exit 0
 d=$(head -n1 "$f" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
 case $d in ''|*YYYY*) exit 0;; esac   # placeholder: not set yet
 end=$(date -d "$d" +%s 2>/dev/null) || end=
-if [ -z "$end" ]; then   # BSD/macOS date
-  for fmt in "%Y-%m-%dT%H:%M" "%Y-%m-%dT%H:%M:%S" "%Y-%m-%d %H:%M"; do
-    end=$(date -j -f "$fmt" "$d" +%s 2>/dev/null) && break; end=
+if [ -z "$end" ]; then   # BSD/macOS date: -j fills any field you don't give it (seconds) from the current time, so add :00
+  for p in "%Y-%m-%dT%H:%M:%S|$d:00" "%Y-%m-%dT%H:%M:%S|$d" "%Y-%m-%d %H:%M:%S|$d:00"; do
+    end=$(date -j -f "${p%%|*}" "${p#*|}" +%s 2>/dev/null) && break; end=
   done
 fi
 if [ -z "$end" ]; then
