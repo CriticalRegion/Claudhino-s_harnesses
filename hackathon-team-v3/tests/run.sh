@@ -252,6 +252,8 @@ if [ -n "$WIN" ] && command -v cygpath >/dev/null; then
 fi
 rm -f "$T/va/.hackathon/.warned"; o=$(cd "$T/va" && printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$T/va/web/x.tsx" | HK_COLLISION=warn bash .hackathon/bin/hk.sh pretool)
 has "HK_COLLISION=warn: context only" "$o" '"additionalContext"'; hasnt "HK_COLLISION=warn: no deny" "$o" "deny"
+rm -f "$T/va/.hackathon/.warned"; o=$(cd "$T/va" && printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$T//va//web/y.tsx" | bash .hackathon/bin/hk.sh pretool)
+has "path with // is recognised (macOS TMPDIR ends in /)" "$o" "@bob's directory web/"
 
 echo "# v3: contract-change alerts"
 cd "$T/va" || exit 1; git pull -q --rebase; echo "export type Item = { id: string; name: string }" > contracts/api.ts
@@ -293,12 +295,15 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_response(code); self.send_header("Content-Type", "application/json"); self.end_headers()
         if out is not None: self.wfile.write(json.dumps(out).encode())
     def log_message(self, *a): pass
-s = http.server.HTTPServer(('127.0.0.1', 0), H)
+class S(http.server.HTTPServer):
+    def server_bind(self):   # skip HTTPServer's getfqdn(): a slow reverse-DNS lookup on macOS runners
+        http.server.socketserver.TCPServer.server_bind(self); self.server_name, self.server_port = '127.0.0.1', self.server_address[1]
+s = S(('127.0.0.1', 0), H)
 open(portf, 'w').write(str(s.server_port)); s.serve_forever()
 PY
 if [ -n "$PY" ]; then
 "$PY" "$T/hook.py" "$T/posts" "$T/port" forum & SRV=$!
-waitfor '[ -s "$T/port" ]'; FAKE="http://127.0.0.1:$(cat "$T/port")/api/webhooks/1/x"
+waitfor '[ -s "$T/port" ]' 120; FAKE="http://127.0.0.1:$(cat "$T/port")/api/webhooks/1/x"
 has "setter rejects non-Discord URLs" "$(hk va discord http://evil.example/x)" "usage"
 echo "$FAKE" > "$T/va/.hackathon/.discord"
 hk va log "BLOCKED waiting on stripe keys" >/dev/null
@@ -322,7 +327,7 @@ has "status shows off" "$(hk vb discord status)" "off for this project"
 rm -f "$T/xdg/hackathon-harness/discord"
 kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null; rm -f "$T/port"
 "$PY" "$T/hook.py" "$T/posts2" "$T/port" plain & SRV=$!
-waitfor '[ -s "$T/port" ]'; echo "http://127.0.0.1:$(cat "$T/port")/api/webhooks/2/y" > "$T/vc/.hackathon/.discord"
+waitfor '[ -s "$T/port" ]' 120; echo "http://127.0.0.1:$(cat "$T/port")/api/webhooks/2/y" > "$T/vc/.hackathon/.discord"
 git -C "$T/vc/.hackathon/state" pull -q --rebase 2>/dev/null
 ( cd "$T/vc/.hackathon/state" && awk -F'|' -v OFS='|' '{k=$2; gsub(/ /,"",k)} k=="discord_thread" {$3=" - "} {print}' MODE.md > m && mv m MODE.md && git commit -qam reset && git push -q origin HEAD:hackathon-state ) 2>/dev/null
 hk vc log "BLOCKED plain thing" >/dev/null
