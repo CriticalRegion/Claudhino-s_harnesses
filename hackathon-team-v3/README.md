@@ -5,7 +5,7 @@ Claude Code config for hackathons: demo-first rules, a deadline clock, cheap res
 1. `bash hackathon-team-v3/install.sh /path/to/your-repo` - copies without overwriting your files (merges `.gitignore`, `CLAUDE.md`, `.mcp.json`, `.claude/settings.json`).
 2. In your repo: commit and push. Each teammate clones, then runs `bash .hackathon/bin/hk.sh init <name>`.
 3. `claude` (interactively once, accept the trust dialog and the ponytail plugin prompt), then `/mcp` to sign in to github and vercel.
-4. Optional: post your events to Discord with `bash .hackathon/bin/hk.sh discord <webhook-url>`.
+4. Optional, once per machine: make a Discord **Forum** channel with a webhook and run `bash .hackathon/bin/hk.sh discord <webhook-url> --global`. Each project then gets its own forum post automatically.
 
 Built for Linux, macOS (including the stock bash 3.2 and BSD tools) and Windows (Git Bash, which Claude Code uses for hooks there); CI runs the tests on all three. Scripts are kept LF-only so Windows CRLF checkouts can't break them.
 
@@ -26,7 +26,7 @@ Team: `/sync`, `/claim <id>`, `/handoff <id> <path:line>`. Events arrive by them
 | `hk.sh` + state branch | Board / log / decisions on their own branch, never touching your code | Zero tokens when nothing changed |
 | event routing + hooks | Urgent-for-you events mid-task (`PostToolUse`) or by waking you (`asyncRewake`); FYI at the next prompt | ~20-40 tokens per relevant event, capped at 6 wakes/hour |
 | guards | One ASK/ANSWER round trip then ESCALATE to humans; collision warning before editing a teammate's file; stale-claim takeover; contract-change alerts | Prevents agent loops and wasted work |
-| Discord webhook (optional) | Humans follow every event in a channel | No agent tokens |
+| Discord webhook (optional) | Humans follow every event: one forum post per project, created automatically, under each person's name | No agent tokens |
 | autonomous mode | `hk.sh auto on [2h]`: agents approve their own prompts (deny list still applies), never ask, keep going until work runs out; team-wide kill switch `hk.sh auto off` | Stops itself when idle or stuck |
 | solo mode | `hk.sh solo @name`: one agent finishes alone with free rein; everyone else is muted | No team chatter in the endgame |
 | `/demo-check` | Walks the demo path in a browser after deploys, logs DEMO GREEN/RED | One focused pass |
@@ -43,9 +43,9 @@ Team: `/sync`, `/claim <id>`, `/handoff <id> <path:line>`. Events arrive by them
 | `hk.sh log "ASK @x: ..."` / `"ANSWER @x: ..."` / `"BLOCKED ..."` / `"CLAIM-FILE <path>"` | Post an event |
 | `hk.sh note "@name ..."` | A human's note to someone's agent |
 | `hk.sh demo green\|red "..."` | Demo-path health (used by `/demo-check`) |
-| `hk.sh discord <url>\|off\|test` | Post your events to Discord |
+| `hk.sh discord <url> [--global]` / `off` / `test` / `status` | Post your events to Discord (`--global`: every project on this machine) |
 | `hk.sh auto on [2h] [--me]` / `off` / `status` | Autonomous mode for the team (or just you) |
 | `hk.sh solo @name [2h]` / `solo off` | One agent finishes alone; others muted |
 
 ## Test it
-`bash hackathon-team-v3/tests/run.sh` - 195 end-to-end checks against throwaway repos: everything from v2 plus routing, delivery, wake-ups, guards, Discord via a local fake webhook, v2-board upgrade, CRLF and Windows-path handling, autonomous and solo mode. GitHub Actions runs them on Linux, macOS (stock bash 3.2 + BSD awk) and Windows (Git Bash, CRLF checkout) on every push and PR. Wake-ups, mid-task delivery, the collision guard, the loop guard, autonomous mode, solo mode and the kill switch were also verified in live interactive Claude Code sessions on Linux.
+`bash hackathon-team-v3/tests/run.sh` - 207 end-to-end checks against throwaway repos: everything from v2 plus routing, delivery, wake-ups, guards, Discord via a local fake webhook, v2-board upgrade, CRLF and Windows-path handling, autonomous and solo mode. GitHub Actions runs them on Linux, macOS (stock bash 3.2 + BSD awk) and Windows (Git Bash, CRLF checkout) on every push and PR. Wake-ups, mid-task delivery, the collision guard, the loop guard, autonomous mode, solo mode and the kill switch were also verified in live interactive Claude Code sessions on Linux.

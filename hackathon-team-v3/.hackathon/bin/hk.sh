@@ -14,7 +14,9 @@
 #   decide "<text>"                  one line to DECISIONS.md
 #   demo green|red "<details>"       demo-path health after a deploy
 #   board                            print the board
-#   discord <webhook-url>|off|test   also post your events to a Discord channel (URL stays local)
+#   discord <webhook-url> [--global] | off [--global] | test | status
+#                                    post your events to Discord; a forum channel gets one post per
+#                                    project, created automatically (URL stays local, never committed)
 #   auto on [2h] [--me] | off [--me] | clear --me | status
 #                                    autonomous mode: agents approve their own prompts (deny list still
 #                                    applies), never wait for a human, keep going until work runs out
@@ -284,7 +286,17 @@ ahead(){ [ -n "$R" ] || { echo 0; return; }
 own_lines(){ # my LOG/DECISIONS lines added between $1 and HEAD
   [ -n "$1" ] && g cat-file -e "$1^{commit}" 2>/dev/null || return 0
   g diff -U0 "$1" HEAD -- LOG.md DECISIONS.md 2>/dev/null | grep -E '^\+[0-9]' | sed 's/^+//' | grep "^[0-9:]* @$ME " || true; }
-announce(){ [ -s "$H/.discord" ] || return 0; local l; l=$(own_lines "$1"); [ -n "$l" ] && bg _post "$l"; return 0; }
+GCONF=${XDG_CONFIG_HOME:-$HOME/.config}/hackathon-harness
+discord_url(){ local u; u=$(cat "$H/.discord" 2>/dev/null || true)
+  [ "$u" = off ] && return 1
+  [ -n "$u" ] || u=$(cat "$GCONF/discord" 2>/dev/null || true)
+  [ -n "$u" ] && printf '%s' "$u"; }
+announce(){ discord_url >/dev/null || return 0; local l; l=$(own_lines "$1"); [ -n "$l" ] && bg _post "$l"; return 0; }
+jesc(){ printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}'; }
+dpost(){ # url json -> prints the response body, then the HTTP status on the last line
+  printf '%s' "$2" | curl -s -m 10 -w '\n%{http_code}' -H 'Content-Type: application/json' --data-binary @- "$1" 2>/dev/null || echo 000; }
+project_title(){ local n; n=$(gm remote get-url "$R" 2>/dev/null | sed -e 's#/*$##' -e 's#.*[/:]##' -e 's#\.git$##')
+  [ -n "$n" ] || n=$(basename "$ROOT"); printf '%s · %s' "$n" "$(date +%Y-%m-%d)"; }
 publish(){ # push local state commits; 0 pushed, 1 offline, 2 conflict
   [ -n "$R" ] || return 0
   local i rc before; before=$(rref)
@@ -472,16 +484,40 @@ _bgfetch) # fetch, and fast-forward the state checkout if nothing local is pendi
   fetch || exit 0; ff_state; exit 0 ;;
 
 _post) # Discord webhook post (background). Mentions are disabled so nobody gets pinged.
-  url=$(cat "$H/.discord" 2>/dev/null || true); [ -n "$url" ] || exit 0
+  url=$(discord_url) || exit 0
   text=$(printf '%s\n' "$*" | awk '
     { e = "•"; if ($3 == "DONE") e = "✅"; else if ($3 == "BLOCKED") e = "⛔"; else if ($3 == "ASK") e = "❓";
       else if ($3 == "ANSWER") e = "💬"; else if ($3 == "ESCALATE") e = "🚨"; else if ($3 == "CLAIMED" || $3 == "TOOK-OVER") e = "🙋";
       else if ($3 == "NOTE") e = "📝"; else if ($3 == "CONTRACT-CHANGED") e = "📜"; else if ($3 == "DEMO") e = ($4 == "RED") ? "🔴" : "🟢";
       else if ($3 == "AUTO") e = "🤖"; else if ($3 == "SOLO") e = "🎯"; else if ($3 == "STUCK") e = "🧱";
       if (NR <= 15) print e " " substr($0, 1, 300) }')
-  body=$(printf '%s' "$text" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
-  printf '{"content":"%s","allowed_mentions":{"parse":[]}}' "$body" \
-    | curl -s -m 8 -o /dev/null -H 'Content-Type: application/json' --data-binary @- "$url"
+  who=$(printf '%s' "${ME:-hk}" | tr -d '@#:`' | sed 's/[Dd][Ii][Ss][Cc][Oo][Rr][Dd]//g; s/[Cc][Ll][Yy][Dd][Ee]//g'); [ -n "$who" ] || who=hk
+  base="\"content\":\"$(jesc "$text")\",\"username\":\"$who\",\"allowed_mentions\":{\"parse\":[]}"
+  sep='?'; case $url in *\?*) sep='&';; esac
+  tid=""; bad=""; inited && tid=$(mode_get discord_thread)
+  case $tid in
+    plain) dpost "$url" "{$base}" >/dev/null; exit 0 ;;
+    ''|-) ;;
+    *) r=$(dpost "$url${sep}thread_id=$tid" "{$base}"); case $(printf '%s' "$r" | tail -n1) in 2*) exit 0;; esac
+       [ -n "${HK_POST_RETRY:-}" ] && exit 0; bad=$tid; tid=""   # post deleted? make a new one (once)
+       ;;
+  esac
+  # No post for this project yet: create it under the lock so teammates don't create two.
+  locked=0
+  if inited; then i=0; until trylock "$LOCK"; do i=$((i+1)); [ $i -ge 40 ] && break; sleep 0.25; done
+    [ $i -lt 40 ] && { locked=1; trap 'unlock "$LOCK"' EXIT; state_pull >/dev/null 2>&1; ensure_layout; tid=$(mode_get discord_thread)
+      case $tid in ''|-|"$bad") ;; *) unlock "$LOCK"; HK_POST_RETRY=1 exec bash "$SELF" _post "$@";; esac; }
+  fi
+  title="$(project_title)"; [ "$text" != "${text#*hk.sh test message}" ] && ! inited && title="hk.sh test"
+  r=$(dpost "$url${sep}wait=true" "{$base,\"thread_name\":\"$(jesc "$title")\"}")
+  case $(printf '%s' "$r" | tail -n1) in
+    2*) tid=$(printf '%s' "$r" | sed -n 's/.*"channel_id"[[:space:]]*:[[:space:]]*"\([0-9][0-9]*\)".*/\1/p' | head -n1) ;;
+    4*) r=$(dpost "$url" "{$base}")   # not a forum channel: plain posts from now on
+        case $(printf '%s' "$r" | tail -n1) in 2*) tid=plain;; *) tid="";; esac ;;
+    *) tid="" ;;
+  esac
+  if [ $locked = 1 ] && [ -n "$tid" ]; then
+    upsert MODE.md discord_thread "$tid"; g add -A && g commit -qm "discord ($ME)" >/dev/null && publish >/dev/null 2>&1; fi
   exit 0 ;;
 
 _mergeboard) # git merge driver: 3-way merge of a table by its first column; only same-row edits conflict
@@ -589,13 +625,22 @@ demo)
   shift; prep; logline "DEMO $st $*"; save "demo" "DEMO $st logged" ;;
 
 discord)
+  glob=0; [ "${2:-}" = --global ] && glob=1
+  usage="usage: hk.sh discord <https://discord.com/api/webhooks/...> [--global] | off [--global] | test | status"
   case "${1:-}" in
-    off) rm -f "$H/.discord"; echo "discord: off" ;;
-    test) [ -s "$H/.discord" ] || die "discord: not set. hk.sh discord <webhook-url>"
+    off) if [ $glob = 1 ]; then rm -f "$GCONF/discord"; echo "discord: machine-wide URL removed"
+         else echo off > "$H/.discord"; echo "discord: off for this project (a machine-wide URL is ignored here)"; fi ;;
+    test) discord_url >/dev/null || die "discord: not set. $usage"
       bash "$SELF" _post "$(stamp) @${ME:-?} hk.sh test message"; echo "discord: test sent (check the channel)" ;;
+    status) if [ "$(cat "$H/.discord" 2>/dev/null)" = off ]; then echo "discord: off for this project"
+      elif [ -s "$H/.discord" ]; then echo "discord: on (this project's URL)"
+      elif [ -s "$GCONF/discord" ]; then echo "discord: on (machine-wide URL in $GCONF/discord)"
+      else echo "discord: not set"; fi
+      t=""; inited && t=$(mode_get discord_thread); case $t in ''|-) echo "post: none yet (created by the first event)";; plain) echo "channel: normal text channel";; *) echo "forum post id: $t";; esac ;;
     https://discord.com/api/webhooks/*|https://discordapp.com/api/webhooks/*|https://canary.discord.com/api/webhooks/*|https://ptb.discord.com/api/webhooks/*)
-      (umask 077; printf '%s\n' "$1" > "$H/.discord"); echo "discord: on. URL saved in .hackathon/.discord (gitignored). Try: hk.sh discord test" ;;
-    *) die "usage: hk.sh discord <https://discord.com/api/webhooks/...> | off | test" ;;
+      if [ $glob = 1 ]; then (umask 077; mkdir -p "$GCONF"; printf '%s\n' "$1" > "$GCONF/discord"); echo "discord: on for every project on this machine ($GCONF/discord). Try: hk.sh discord test"
+      else (umask 077; printf '%s\n' "$1" > "$H/.discord"); echo "discord: on for this project (.hackathon/.discord, gitignored). Try: hk.sh discord test"; fi ;;
+    *) die "$usage" ;;
   esac ;;
 
 auto)
