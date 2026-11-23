@@ -365,7 +365,7 @@ sed -i.bak 's#^- Live URL:.*#- Live URL: http://localhost:3000#' "$T/xb/.hackath
 has "autostop: board done, URL set -> demo check" "$(stp xb)" "run /demo-check"
 hk xb demo green http://localhost:3000 >/dev/null; eq "autostop: work ran out -> may stop" "$(stp xb)" ""
 hk xa demo red "step 2 checkout 500" >/dev/null; fetchnow xb; has "autostop: DEMO RED -> fix it" "$(stp xb)" "demo is RED"
-stp xb >/dev/null; stp xb >/dev/null; stp xb >/dev/null; eq "no progress after 3 tries -> stops" "$(stp xb)" ""
+stp xb >/dev/null; stp xb >/dev/null; eq "3 no-progress turn-ends after the nudge -> stops" "$(stp xb)" ""
 waitfor 'r5_log | grep -q "STUCK (autonomous)"' && ok "STUCK logged for the humans" || no "STUCK logged" "$(r5_log | tail -2)"
 hk xa demo green ok >/dev/null; fetchnow xb
 hk xb auto off --me >/dev/null; eq "per-person override off" "$(prm xb)" ""; has "status shows override" "$(hk xb auto status)" "overrides: off"
@@ -391,6 +391,21 @@ has "solo agent takes any task" "$(hk xb claim s1)" "TOOK-OVER s1"
 hk xa log "CLAIM-FILE misc/x.ts" >/dev/null; fetchnow xb
 eq "solo agent: no collision warnings" "$(cd "$T/xb" && printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$T/xb/misc/x.ts" | bash .hackathon/bin/hk.sh pretool)" ""
 hk xb solo off >/dev/null; fetchnow xa; has "SOLO OFF reaches the muted" "$(pt xa)" "SOLO OFF"; eq "solo agent back to normal" "$(prm xb)" ""
+
+echo "# v3: demo-first toggle"
+has "demo-first on by default" "$(hk xb demo-first status)" "you (@bob): demo-first on"
+hasnt "no extra session line while on" "$(hk xb sync --hook)" "DEMO-FIRST"
+has "team switch off" "$(hk xa demo-first off)" "DEMO-FIRST OFF"
+has "stored on the board" "$(git -C "$T/r5.git" show hackathon-state:MODE.md)" "| demo_first | off |"
+fetchnow xb; has "DEMO-FIRST OFF reaches teammates mid-task" "$(pt xb)" "DEMO-FIRST OFF"
+has "session start says build properly" "$(hk xb sync --hook)" "DEMO-FIRST OFF: build features properly"
+hk xb demo-first on --me >/dev/null; has "per-clone override" "$(hk xb demo-first status)" "you (@bob): demo-first on"
+hasnt "override hides the off line" "$(hk xb sync --hook)" "DEMO-FIRST OFF"
+hk xb demo-first clear --me >/dev/null; has "clear -> team setting again" "$(hk xb demo-first status)" "you (@bob): demo-first off"
+hk xa demo-first on >/dev/null; fetchnow xb; has "DEMO-FIRST ON reaches teammates" "$(pt xb)" "DEMO-FIRST ON"
+has "back on for everyone" "$(hk xb demo-first status)" "you (@bob): demo-first on"
+eq "bad argument refused" "$(hkrc xa demo-first maybe)" 1
+has "CLAUDE.md has both rule sets" "$(cat "$T/xa/CLAUDE.md")" "## When DEMO-FIRST is OFF"
 
 echo "# claims don't swallow teammates' news"
 hk xb log "BLOCKED on keys" >/dev/null; hk xa add c1 - >/dev/null; hk xa claim c1 >/dev/null

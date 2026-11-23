@@ -11,6 +11,9 @@
 .hackathon/.warned
 .hackathon/.watch.pid
 .hackathon/.discord
+.hackathon/.demofirst
+.hackathon/.auto
+.hackathon/.autofp
 CLAUDE.local.md
 .claude/settings.local.json
 .playwright-mcp/
