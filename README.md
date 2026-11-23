@@ -16,7 +16,7 @@ A Claude Code setup for hackathon teams of 2-4 people, each running their own ag
 - **Guards:** one ASK/ANSWER round trip, then it escalates to the humans; a warning before editing a teammate's file; stale-claim takeover; contract-change alerts.
 - **Autonomous mode** (`hk.sh auto on 2h`): agents approve their own prompts (the safety deny list still applies), never stop to ask, and keep working through the board until the work runs out, with a time budget and a team-wide kill switch (`hk.sh auto off`).
 - **Solo mode** (`hk.sh solo @alice`): for the endgame, one agent finishes alone with free rein over the repo while everyone else's agent is muted.
-- **Extras:** `/demo-check` (browser walk of the demo path after deploys), an optional Discord webhook so humans can follow every event, Haiku `scout` and Sonnet `judge` agents, pinned context7 / Playwright / GitHub / Vercel MCP servers, and read-deny rules for secrets and build output.
+- **Extras:** `/demo-check` (browser walk of the demo path after deploys), an optional Discord webhook (set once per machine; each hackathon gets its own forum post automatically) so humans can follow every event, Haiku `scout` and Sonnet `judge` agents, pinned context7 / Playwright / GitHub / Vercel MCP servers, and read-deny rules for secrets and build output.
 - **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash).
 
 **Quick start**

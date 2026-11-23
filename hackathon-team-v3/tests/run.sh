@@ -11,7 +11,7 @@ case $(uname -s) in MINGW*|MSYS*|CYGWIN*) WIN=1;; *) WIN=;; esac   # Git Bash on
 PY=; for c in python3 python; do "$c" -c 'import sys' >/dev/null 2>&1 && { PY=$c; break; }; done
 echo "# platform: $(uname -s), bash $BASH_VERSION, $(awk --version 2>/dev/null | head -n1 | cut -c1-40)${WIN:+ (Windows)}" 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
-export GIT_CONFIG_GLOBAL=$T/gitconfig GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL=$T/gitconfig GIT_CONFIG_NOSYSTEM=1 XDG_CONFIG_HOME=$T/xdg
 git config --global init.defaultBranch main; git config --global user.name t; git config --global user.email t@t
 pass=0; fail=0
 ok(){ pass=$((pass+1)); echo "  ok   $1"; }
@@ -276,27 +276,63 @@ fetchnow vb; has "old owner told their task was taken" "$(pt vb)" "TOOK-OVER t3-
 
 echo "# v3: Discord webhook (events out)"
 cat > "$T/hook.py" <<'PY'
-import http.server, sys
+import http.server, sys, json, urllib.parse
+posts, portf, mode = sys.argv[1], sys.argv[2], sys.argv[3]
 class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         b = self.rfile.read(int(self.headers.get('Content-Length', 0)))
-        with open(sys.argv[1], 'ab') as f: f.write(b + b'\n')
-        self.send_response(204); self.end_headers()
+        u = urllib.parse.urlparse(self.path); q = urllib.parse.parse_qs(u.query); d = json.loads(b or b'{}')
+        with open(posts, 'a') as f: f.write(json.dumps({"q": q, "body": d}) + "\n")
+        if mode == "forum":     # like Discord: forum webhooks need thread_name (new post) or thread_id
+            if "thread_id" in q: code, out = 200, {"id": "m2", "channel_id": q["thread_id"][0]}
+            elif d.get("thread_name"): code, out = 200, {"id": "m1", "channel_id": "777"}
+            else: code, out = 400, {"code": 220001}
+        else:                   # plain text channel: thread_name is rejected
+            code, out = (400, {"code": 220003}) if d.get("thread_name") else (204, None)
+        self.send_response(code); self.send_header("Content-Type", "application/json"); self.end_headers()
+        if out is not None: self.wfile.write(json.dumps(out).encode())
     def log_message(self, *a): pass
 s = http.server.HTTPServer(('127.0.0.1', 0), H)
-open(sys.argv[2], 'w').write(str(s.server_port)); s.serve_forever()
+open(portf, 'w').write(str(s.server_port)); s.serve_forever()
 PY
 if [ -n "$PY" ]; then
-"$PY" "$T/hook.py" "$T/posts" "$T/port" & SRV=$!
-waitfor '[ -s "$T/port" ]'; echo "http://127.0.0.1:$(cat "$T/port")/api/webhooks/test" > "$T/va/.hackathon/.discord"
+"$PY" "$T/hook.py" "$T/posts" "$T/port" forum & SRV=$!
+waitfor '[ -s "$T/port" ]'; FAKE="http://127.0.0.1:$(cat "$T/port")/api/webhooks/1/x"
 has "setter rejects non-Discord URLs" "$(hk va discord http://evil.example/x)" "usage"
+echo "$FAKE" > "$T/va/.hackathon/.discord"
 hk va log "BLOCKED waiting on stripe keys" >/dev/null
 waitfor 'grep -q "stripe keys" "$T/posts"' 40 && ok "event posted to the webhook" || no "webhook post"
-node -e 'const l=require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").map(JSON.parse).pop();process.exit(l.content.includes("⛔")&&l.content.includes("@alice BLOCKED")&&Array.isArray(l.allowed_mentions.parse)&&!l.allowed_mentions.parse.length?0:1)' "$T/posts" \
-  && ok "post is valid JSON, mentions disabled" || no "post format" "$(tail -1 "$T/posts")"
-n=$(wc -l < "$T/posts"); hk vb log "BLOCKED bob thing" >/dev/null; sleep 1
-eq "only your own events are posted from your clone" "$(wc -l < "$T/posts")" "$n"
-has "discord off" "$(hk va discord off)" "off"; [ ! -e "$T/va/.hackathon/.discord" ] && ok "webhook URL removed" || no "webhook URL removed"
+pj(){ node -e 'const L=require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n").map(JSON.parse);const p=L.filter(x=>JSON.stringify(x).includes(process.argv[2])).pop();console.log(p?JSON.stringify(p):"")' "$T/posts" "$1"; }
+o=$(pj "stripe keys")
+has "forum: first event opens a post named after the project" "$o" '"thread_name":"r3 · '
+has "sender name is the person" "$o" '"username":"alice"'
+has "mentions disabled" "$o" '"allowed_mentions":{"parse":[]}'
+has "emoji per event type" "$o" "⛔"
+waitfor 'git -C "$T/r3.git" show hackathon-state:MODE.md | grep -q "| discord_thread | 777 |"' 40 && ok "post id shared on the board" || no "post id stored" "$(git -C "$T/r3.git" show hackathon-state:MODE.md)"
+mkdir -p "$T/xdg/hackathon-harness"; echo "$FAKE" > "$T/xdg/hackathon-harness/discord"
+has "status: machine-wide URL" "$(hk vb discord status)" "machine-wide"
+fetchnow vb; hk vb sync >/dev/null; hk vb log "BLOCKED bob thing" >/dev/null
+waitfor 'grep -q "bob thing" "$T/posts"' 40 && ok "teammate posts via the machine-wide URL" || no "global URL post"
+o=$(pj "bob thing"); has "teammate posts into the same post" "$o" '"thread_id":["777"]'; hasnt "no second post created" "$o" "thread_name"
+has "and as themselves" "$o" '"username":"bob"'
+n=$(wc -l < "$T/posts"); hk vb discord off >/dev/null; hk vb log "BLOCKED quiet thing" >/dev/null; sleep 1.5
+eq "discord off in a project silences the machine-wide URL" "$(wc -l < "$T/posts")" "$n"
+has "status shows off" "$(hk vb discord status)" "off for this project"
+rm -f "$T/xdg/hackathon-harness/discord"
+kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null; rm -f "$T/port"
+"$PY" "$T/hook.py" "$T/posts2" "$T/port" plain & SRV=$!
+waitfor '[ -s "$T/port" ]'; echo "http://127.0.0.1:$(cat "$T/port")/api/webhooks/2/y" > "$T/vc/.hackathon/.discord"
+git -C "$T/vc/.hackathon/state" pull -q --rebase 2>/dev/null
+( cd "$T/vc/.hackathon/state" && awk -F'|' -v OFS='|' '{k=$2; gsub(/ /,"",k)} k=="discord_thread" {$3=" - "} {print}' MODE.md > m && mv m MODE.md && git commit -qam reset && git push -q origin HEAD:hackathon-state ) 2>/dev/null
+hk vc log "BLOCKED plain thing" >/dev/null
+waitfor 'grep -c "plain thing" "$T/posts2" | grep -q 2' 40 && ok "text channel: falls back to a plain post" || no "plain fallback" "$(cat "$T/posts2" 2>/dev/null)"
+waitfor 'git -C "$T/r3.git" show hackathon-state:MODE.md | grep -q "| discord_thread | plain |"' 40 && ok "remembers it's a text channel" || no "plain remembered"
+hk vc log "BLOCKED plain again" >/dev/null; waitfor 'grep -q "plain again" "$T/posts2"' 40
+hasnt "later posts skip the forum attempt" "$(grep "plain again" "$T/posts2")" "thread_name"
+has "discord test reports delivery" "$(hk vc discord test)" "delivered"
+kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null
+has "discord test reports failure" "$(hk vc discord test)" "refused"
+has "discord off" "$(hk vc discord off)" "off"
 else echo "  (skipped: no working python for the fake webhook)"; fi
 
 echo "# v3: autonomous mode"
