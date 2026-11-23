@@ -3,13 +3,13 @@ description: Set up (or re-tune) the hackathon harness in this project - event c
 argument-hint: [anything you already know: event name/URL, deadline, team]
 ---
 Known so far: $ARGUMENTS
-This is the per-hackathon setup interview: the human answers, you apply. Keep each message short. Never turn on autonomous or solo mode here.
+This is the per-hackathon setup interview: the human answers, you apply; never skip a question by assuming the answer. Keep each message short. Never turn on autonomous or solo mode here.
 0. State: run `hk status` and `hk migrate-v3`. Not a git repo with at least one commit: stop and say so. v3 files found: show the list and, with the human's OK, run `hk migrate-v3 --apply`; if CLAUDE.md still has v3's "# Hackathon mode" section, show it and, with their OK, delete only that section (the plugin injects the rules now).
 1. Project pieces (first run, or after a plugin update): `hk install-project` (defaults: `--model sonnet --mcp github,vercel --ponytail on`; step 5 may change them).
 2. You: if `hk status` says "not set up in this clone", ask the human's team handle (short, lowercase) and run `hk init <handle>`. It creates or joins the team board (a separate `hackathon-state` branch on the remote); it never pushes code.
 3. Joining a configured team? If `hk config show` shows `(team)` values, the event is already set up: do only step 6 (their personal model), step 7 (Discord) and step 8. Otherwise continue.
 4. Event, in one plain-text message the human can partly skip: event name and URL; deadline (local time); brief/theme; sponsor or required tech; judging criteria and weights; submission requirements (video length, public repo, live URL, pitch length); team members with skills and when each person's 5-hour usage window starts; links (Devpost, Discord, docs). Fill the "## Event" section of `.hackathon/PLAN.md` ("unknown" for skipped lines) and write the deadline to `.hackathon/deadline` as `YYYY-MM-DDTHH:MM`, nothing else. Event URL given and no `.hackathon/RESEARCH.md`: offer `/hackathon:research`.
-5. Profile and toggles, with AskUserQuestion:
+5. Profile and toggles. ALWAYS ask this with AskUserQuestion, even when the human gave lots of detail; never choose the profile for them:
    a. Profile: **sprint** (Recommended: lean and fast; guard and stop check off), **crunch** (autonomous-ready: auto-approve, 6h autonomous budget, collisions warn instead of refuse, pre-push checks off), **careful** (build it properly: demo-first off, reviewer, guard and stop check on).
    b. One multi-select, "Change anything from that profile?": Rules and modes / Notifications / Tools / Timing. For each group picked, ask its toggles with the profile's value as the default (`hk config show` lists them):
       - Rules and modes: demo_first, auto_budget, collision (refuse/warn/off), loop_guard, reviewer, guard, stop_check, config_protect

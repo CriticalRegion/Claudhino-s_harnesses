@@ -27,7 +27,9 @@
       "Bash(curl -s http://localhost*)",
       "Bash(curl http://127.0.0.1*)",
       "mcp__plugin_hackathon_context7",
-      "mcp__plugin_hackathon_playwright"
+      "mcp__plugin_hackathon_playwright",
+      "WebSearch",
+      "WebFetch"
     ],
     "ask": [
       "Bash(git reset --hard*)",

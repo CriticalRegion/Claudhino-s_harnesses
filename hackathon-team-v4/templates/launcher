@@ -14,7 +14,7 @@ if [ -z "$p" ] || [ ! -f "$p/bin/hk" ]; then
   exit 1
 fi
 if [ "${1:-}" = statusline ]; then   # fast path: straight to node, no shell engine in between
-  { [ -f "$root/.hackathon/.paused" ] || [ -f "$root/.hackathon/.off" ]; } && { echo "hackathon harness paused"; exit 0; }
+  { [ -f "$root/.hackathon/.paused" ] || [ -f "$root/.hackathon/.off" ]; } && { echo "hackathon harness paused or off here"; exit 0; }
   command -v node >/dev/null 2>&1 || exit 0
   HH_ROOT=$root exec node "$p/bin/hh.js" statusline
 fi
