@@ -10,18 +10,19 @@ A Claude Code setup for hackathon teams of 2-4 people, each running their own ag
 
 **What it does**
 - **Demo-first rules, toggleable:** by default agents build only the demo path, vertical slice first, faking what judges can't see (tagged `FAKE:` so the pitch stays honest). `hk.sh demo-first off` switches the whole team to build-it-properly rules (complete features, no fakes, error handling, tests) and back.
+- **Research before, memory after:** `/research <event URL>` builds a one-page brief (sponsors' newest tech, judges, criteria, least-crowded tracks, past winners, ideas to avoid, 3 winning angles). After judging, `/postmortem` saves one-line lessons on your machine, and every future `/kickoff` reads them, so each hackathon starts smarter than the last.
 - **Smarter kickoff:** `/kickoff` generates 5 ideas, drops ones that already exist, scores the rest on originality, real-world problem, sponsor tech and demo-to-effort, then scaffolds, deploys and splits the work into board tasks with dependencies.
 - **Deadline clock:** time left is injected into context; under 4h the agent polishes, under 1h it freezes features.
 - **Team board on its own git branch:** claim tasks (the remote is the lock, so simultaneous claims have exactly one winner), log events, record decisions. It never pushes, pulls or rebases your code, and it works offline (queued, pushed later).
 - **Event notifications:** a teammate's `DONE` on a task you depend on, an `ASK` to you, or a contract change reaches your agent **mid-task** or **wakes it when idle**, as one line (~20-40 tokens). Everything else waits for your next prompt.
 - **Guards:** one ASK/ANSWER round trip, then it escalates to the humans; the first edit of a teammate's claimed or owned file is refused with a warning; stale claims can be taken over; contract changes are announced; pushes to main must pass `npm run check` and a Python syntax check.
-- **Autonomous mode** (`hk.sh auto on 2h`): agents approve their own prompts (the safety deny list still applies), never stop to ask, and keep working through the board until the work runs out, with a time budget, stuck detection and a team-wide kill switch (`hk.sh auto off`).
+- **Autonomous mode** (`hk.sh auto on 2h`, humans only): agents approve their own prompts, except anything that can destroy work (`reset --hard`, `clean`, `restore`, recursive `rm`, `sudo`, piping into a shell) or change the team's modes, which is refused (the safety deny list also still applies), never stop to ask, and keep working through the board until the work runs out, with a time budget, stuck detection and a team-wide kill switch (`hk.sh auto off`).
 - **Solo mode** (`hk.sh solo @alice`): for the endgame, one agent finishes alone with free rein over the repo while everyone else's agent is muted.
 - **Discord feed:** set a Forum channel's webhook once per machine (`hk.sh discord <url> --global`); every hackathon then gets its own forum post automatically, and each event appears as one line with an emoji, under the teammate's name. No bot, no per-event setup.
 - **Demo health:** `/demo-check` walks the demo path in a real browser after deploys and logs `DEMO GREEN` / `DEMO RED` for the team; the `judge` agent scores the demo against the judging criteria before submission.
 - **Token-lean by design:** ponytail (minimal code), a Haiku `scout` for lookups, terse rules, zero tokens when nothing changed, read-deny rules for `node_modules`, build output, lockfiles and `.env` files.
 - **Safe install:** `install.sh` merges into your repo (`.gitignore`, `.gitattributes`, `CLAUDE.md`, `.mcp.json`, settings) and never overwrites your files; pinned plugin and MCP versions.
-- **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash); 222 end-to-end tests run in CI on all three, and the event, autonomous and solo features were verified in live Claude Code sessions.
+- **Runs on** Linux, macOS (stock bash 3.2 and BSD tools) and Windows (Git Bash); 254 end-to-end tests run in CI on all three, and the event, autonomous and solo features were verified in live Claude Code sessions.
 
 **Set up in one paste**
 
