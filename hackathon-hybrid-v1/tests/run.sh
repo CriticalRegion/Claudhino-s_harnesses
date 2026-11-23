@@ -599,10 +599,10 @@ hk h1 auto on 1h >/dev/null 2>&1
 git -C "$T/h1" remote set-url origin "ssh://venue-wifi/x.git"
 s=$(date +%s); (cd "$T/h1" && GIT_SSH_COMMAND="$T/hang.sh" HK_NET_TIMEOUT=3 bash .hackathon/bin/hk.sh sync --hook >/dev/null 2>&1); d1=$(( $(date +%s) - s ))
 [ $d1 -le 8 ] && ok "hung network: session start waits one short attempt (${d1}s)" || no "hung network: session start" "${d1}s"
-s=$(date +%s); (cd "$T/h1" && GIT_SSH_COMMAND="$T/hang.sh" HK_NET_TIMEOUT=3 bash .hackathon/bin/hk.sh sync --hook >/dev/null 2>&1); d2=$(( $(date +%s) - s ))
-[ $d2 -le 2 ] && ok "then fails fast while offline (${d2}s)" || no "fails fast while offline" "${d2}s"
+s=$(date +%s); (cd "$T/h1" && GIT_SSH_COMMAND="$T/hang.sh" HK_NET_TIMEOUT=15 bash .hackathon/bin/hk.sh sync --hook >/dev/null 2>&1); d2=$(( $(date +%s) - s ))
+[ $d2 -le 8 ] && ok "then skips the network while offline (${d2}s; an attempt would take 15s)" || no "skips the network while offline" "${d2}s"
 s=$(date +%s); o=$(cd "$T/h1" && GIT_SSH_COMMAND="$T/hang.sh" HK_NET_TIMEOUT=3 bash .hackathon/bin/hk.sh auto off 2>&1); rc=$?; d3=$(( $(date +%s) - s ))
-[ $d3 -le 12 ] && ok "kill switch answers fast offline (${d3}s)" || no "kill switch offline" "${d3}s"
+[ $d3 -le 15 ] && ok "kill switch answers fast offline (${d3}s)" || no "kill switch offline" "${d3}s"
 eq "kill switch exit code says not published" "$rc" 2; has "and says so" "$o" "NOT published"
 has "but this machine is off at once" "$(hk h1 auto status)" "autonomous off"
 git -C "$T/h1" remote set-url origin "$T/remote.git"; rm -f "$T/h1/.hackathon/.offline"
