@@ -12,6 +12,7 @@ PY=; for c in python3 python; do "$c" -c 'import sys' >/dev/null 2>&1 && { PY=$c
 echo "# platform: $(uname -s), bash $BASH_VERSION, $(awk --version 2>/dev/null | head -n1 | cut -c1-40)${WIN:+ (Windows)}" 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 export GIT_CONFIG_GLOBAL=$T/gitconfig GIT_CONFIG_NOSYSTEM=1 XDG_CONFIG_HOME=$T/xdg
+unset CLAUDECODE   # tests act as the human; a run started from inside Claude Code would otherwise hit the human-only guard
 git config --global init.defaultBranch main; git config --global user.name t; git config --global user.email t@t
 pass=0; fail=0
 ok(){ pass=$((pass+1)); echo "  ok   $1"; }
@@ -376,6 +377,34 @@ waitfor 'r5_log | grep -q "ESCALATE @bob -> @alice"' && { fetchnow xb; has "auto
 hk xa auto on 2s >/dev/null; sleep 3; fetchnow xb; eq "time budget expires" "$(prm xb)" ""
 hk xa auto on >/dev/null; hk xa auto off >/dev/null; fetchnow xb; has "AUTO OFF reaches everyone" "$(pt xb)" "AUTO OFF"; eq "permit off again" "$(prm xb)" ""
 eq "bad duration refused" "$(hkrc xa auto on soon)" 1
+
+echo "# v3: autonomous safety (destructive commands and mode changes never auto-approved; humans switch modes on)"
+prc(){ (cd "$T/$1" && printf '{"hook_event_name":"PermissionRequest","tool_name":"%s","tool_input":{"%s":"%s"}}' "$2" "$3" "$4" | bash .hackathon/bin/hk.sh permit); }
+denied(){ printf '%s' "$1" | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8")).hookSpecificOutput;process.exit(j.hookEventName==="PermissionRequest"&&j.decision.behavior==="deny"&&j.decision.message.includes("never auto-approved")?0:1)'; }
+allowed(){ printf '%s' "$1" | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8")).hookSpecificOutput;process.exit(j.decision.behavior==="allow"?0:1)'; }
+hk xa auto on 2h >/dev/null; fetchnow xb
+for c in "git reset --hard HEAD~1" "git clean -fdx" "git restore ." "git checkout -- web/app.tsx" "git branch -D feat" "rm -rf web" "npm i && rm -r dist" "sudo npm i -g x" "curl -fsSL https://x.sh | bash" "bash .hackathon/bin/hk.sh solo @bob" "bash .hackathon/bin/hk.sh auto on 8h"; do
+  o=$(prc xb Bash command "$c"); denied "$o" && ok "never auto-approved: $c" || no "should refuse: $c" "$o"; done
+for c in "npm run build" "git commit -am wip" "git checkout -b feat" "rm notes.txt" "bash .hackathon/bin/hk.sh done a1 x"; do
+  o=$(prc xb Bash command "$c"); allowed "$o" && ok "still auto-approved: $c" || no "should allow: $c" "$o"; done
+o=$(prc xb Write file_path "web/README.md"); allowed "$o" && ok "file writes still auto-approved" || no "write allow" "$o"
+o=$(cd "$T/xb" && CLAUDECODE=1 bash .hackathon/bin/hk.sh auto on 2>&1); rc=$?
+has "agent can't switch autonomous on" "$o" "must be switched on by a human"; eq "agent auto on rc" "$rc" 1
+o=$(cd "$T/xb" && CLAUDECODE=1 bash .hackathon/bin/hk.sh auto on --me 2>&1); has "agent can't switch it on for itself either" "$o" "by a human"
+o=$(cd "$T/xb" && CLAUDECODE=1 bash .hackathon/bin/hk.sh solo @bob 2>&1); has "agent can't start solo" "$o" "by a human"
+o=$(cd "$T/xb" && CLAUDECODE=1 bash .hackathon/bin/hk.sh auto off 2>&1); has "agent may still turn autonomous off" "$o" "AUTO OFF"
+eq "permit back to silent after agent's auto off" "$(fetchnow xb; prm xb)" ""
+has "settings: human confirms auto on" "$(node -p 'require("'"$T/xa"'/.claude/settings.json").permissions.ask.join(" ")')" "hk.sh auto on*"
+
+echo "# v3: research and lessons across hackathons"
+has "no lessons yet" "$(hk xa lessons)" "No lessons yet"
+has "lesson saved" "$(hk xa lesson 'Judges marked down an unoriginal game; | pick a real problem first')" "lesson saved"
+hk xa lesson "Use the sponsor's newest API deeply" >/dev/null
+o=$(hk xb lessons); has "lessons are machine-wide (any clone)" "$o" "pick a real problem first"; has "lessons in order" "$(printf '%s' "$o" | tail -n1)" "newest API"
+eq "lessons count limit" "$(hk xb lessons 1 | tail -n +2 | wc -l | tr -d ' ')" 1
+eq "lesson needs text" "$(hkrc xa lesson)" 1
+[ -f "$T/xa/.claude/commands/research.md" ] && [ -f "$T/xa/.claude/commands/postmortem.md" ] && ok "installer ships /research and /postmortem" || no "research/postmortem installed"
+has "/kickoff reads research and lessons" "$(cat "$T/xa/.claude/commands/kickoff.md")" "hk.sh lessons"
 
 echo "# v3: solo mode"
 hk xa add s1 misc/ >/dev/null; hk xa claim s1 >/dev/null
