@@ -21,6 +21,7 @@ Teammates: install the plugin, open the project, run `/hackathon:setup` (only as
 | `/hackathon:off` | Disables the plugin for this project (then `/reload-plugins`); `/plugin enable hackathon@claudhino` brings it back |
 | `hk config profile sprint\|crunch\|careful`, `hk config set k=v` | Team settings (all listed by `hk config show`) |
 | `hk demo-first off` | Build it properly instead of demo-first |
+| `hk config set lean=off` | Turn off the build-stage usage savings (size-aware /clear advice, task cards, smoke checks, flail guard, code map) |
 | `hk config set ideation=off` | Bring your own idea: kickoff skips idea generation and just plans it |
 | `.hackathon/bin/hk auto on 2h` / `solo @name` | Autonomous / solo mode: humans only, in your own terminal; `hk auto off` is the kill switch |
 | `/hackathon:night <goal>` then `.hackathon/bin/hk night start --until 07:00 --budget 30` | Night shift: the agents build on branches, review each other (numbered MUST/SHOULD findings, capped rounds), merge what's approved and run goal checks until the Done-when list passes or time/budget runs out; `hk night report` in the morning, `hk night stop` any time |
@@ -30,4 +31,4 @@ Teammates: install the plugin, open the project, run `/hackathon:setup` (only as
 `setup` `research` `kickoff` `pivot` `slice` `sync` `claim` `handoff` `verify` `build-fix` `checkpoint` `demo-check` `cut` `pitch` `ship` `security-scan` `cost` `status` `postmortem` `pause` `resume` `off` `night` `review` `goal-check` (all `/hackathon:<name>`). Agents: `scout` (Haiku), `judge` (Opus), `deep` (Opus escalation), `build-fixer`, `reviewer`, `critic` (night-shift reviews).
 
 ## Test it
-`bash hackathon-team-v4/tests/run.sh` - 625 end-to-end checks (the engine, events, races, offline, modes, the night shift, guard, monitor, stop check, settings, pause/off, rules injection, usage log, v3 migration, the launcher), run in CI on Linux, macOS and Windows. Setup, kickoff, pause/resume and a plugin-less session were also checked live in Claude Code. Builds on v3.1 and hackathon-hybrid-v1 (see GUIDE section 12); parts adapted from [ECC](https://github.com/affaan-m/ECC) (MIT, [notices](THIRD_PARTY_NOTICES.md)).
+`bash hackathon-team-v4/tests/run.sh` - 679 end-to-end checks (the engine, events, races, offline, modes, the night shift, guard, monitor, stop check, settings, pause/off, rules injection, usage log, v3 migration, the launcher), run in CI on Linux, macOS and Windows. Setup, kickoff, pause/resume and a plugin-less session were also checked live in Claude Code. Builds on v3.1 and hackathon-hybrid-v1 (see GUIDE section 12); parts adapted from [ECC](https://github.com/affaan-m/ECC) (MIT, [notices](THIRD_PARTY_NOTICES.md)).

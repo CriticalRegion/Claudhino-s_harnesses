@@ -11,6 +11,7 @@ A Claude Code plugin for hackathon teams of 1-4 people, each running their own a
 **What it does**
 - **Setup interview per event** (`/hackathon:setup`): the event, deadline, judging criteria and weights, team; a profile (**sprint**, **crunch**, **careful**) and any of ~25 toggles, shared by the whole team through the board.
 - **Opus ideation, you pick** (`/hackathon:kickoff`): 8-10 ideas from different angles, web-checked for "already exists", scored by a strict Opus `judge` on the weighted criteria; you choose from the top 3; then a lean plan and the first task. **Switchable**: already have an idea? `hk config set ideation=off` (setup asks) and kickoff just plans yours. `/hackathon:pivot` switches to a runner-up later.
+- **Lean builds** (switchable): a fresh context only once a session is big, task cards and a generated code map instead of exploring, smoke checks instead of a browser walk per slice, a flail guard that escalates after two identical failures, capped tool output, and usage per task on every DONE line.
 - **Demo-first rules, switchable** to build-it-properly; a **deadline clock** that moves agents into polish and feature freeze; rules injected only when active (never in your CLAUDE.md).
 - **Team board on its own git branch**: claims with one winner, dependencies, offline queueing; it never touches your code.
 - **Live events**: a teammate's `DONE` on a task you depend on, an `ASK` to you, or a contract change reaches your agent **mid-task** or **wakes it when idle**, as one line. Loop guard, collision guard, stale-claim takeover, contract alerts.
@@ -18,7 +19,7 @@ A Claude Code plugin for hackathon teams of 1-4 people, each running their own a
 - **Night shift** (4.1): give the team's agents a goal and a Done-when checklist (`/hackathon:night`), start it before you sleep (`hk night start --until 07:00 --budget 30`), and they build on branches, **critique each other's work** (a fresh `critic` agent, numbered MUST/SHOULD findings, capped rounds), merge only what's approved, and run strict goal checks until the checklist passes, time or money runs out, or they've tried enough. A deterministic morning report (`hk night report`) says what got done, what's merged and what needs you.
 - **Guard, monitor, stop check, handoff across `/compact`, status line, security scan**, from the team's hybrid-v1, each a setting (guard and stop check on in the careful profile).
 - **Discord feed** (one forum post per hackathon, under each person's name), **usage log** by model and per teammate, **research** before and **postmortem lessons** after every event.
-- **Runs on** Linux, macOS and Windows (Git Bash). 625 end-to-end tests in CI on all three; setup, kickoff, pause/resume and a plugin-less session checked live in Claude Code.
+- **Runs on** Linux, macOS and Windows (Git Bash). 679 end-to-end tests in CI on all three; setup, kickoff, pause/resume and a plugin-less session checked live in Claude Code.
 
 **Install once per machine**, in Claude Code:
 ```

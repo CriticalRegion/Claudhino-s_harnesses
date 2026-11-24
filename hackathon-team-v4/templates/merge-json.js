@@ -1,5 +1,5 @@
 // Deep-merge a harness template into a project JSON file; your values win for scalars, lists are unioned.
-// usage: node merge-json.js <target.json> <template.json|-> [model=x] [ponytail=on|off] [only=a,b] [strip-v3]
+// usage: node merge-json.js <target.json> <template.json|-> [model=x] [ponytail=on|off] [only=a,b] [strip-v3] [lean=on|off]
 const fs = require('fs');
 const [target, tpl, ...opts] = process.argv.slice(2);
 const opt = Object.fromEntries(opts.map(o => o.includes('=') ? o.split(/=(.*)/s).slice(0, 2) : [o, true]));
@@ -24,6 +24,19 @@ if (opt.ponytail) {
     mine.extraKnownMarketplaces.ponytail = mine.extraKnownMarketplaces.ponytail || { source: { source: 'github', repo: 'DietrichGebert/ponytail', ref: 'v5.3.3' } };
     mine.enabledPlugins['ponytail@ponytail'] = true;
   } else mine.enabledPlugins['ponytail@ponytail'] = false;
+}
+if (opt.lean) {   // build-stage token savings; on: add where unset (your own values win), off: remove only our values
+  const LEAN = { bashOutputMaxChars: 10000, effortLevel: 'high' };
+  const LEAN_ENV = { MAX_MCP_OUTPUT_TOKENS: '8000', CLAUDE_CODE_SUBAGENT_MODEL: 'haiku' };
+  if (opt.lean === 'on') {
+    for (const [k, v] of Object.entries(LEAN)) if (!(k in mine)) mine[k] = v;
+    mine.env = isObj(mine.env) ? mine.env : {};
+    for (const [k, v] of Object.entries(LEAN_ENV)) if (!(k in mine.env)) mine.env[k] = v;
+  } else {
+    for (const [k, v] of Object.entries(LEAN)) if (mine[k] === v) delete mine[k];
+    if (isObj(mine.env)) { for (const [k, v] of Object.entries(LEAN_ENV)) if (mine.env[k] === v) delete mine.env[k];
+      if (!Object.keys(mine.env).length) delete mine.env; }
+  }
 }
 if (opt['strip-v3']) {   // remove v3's copied hooks and hk.sh permission entries
   const v3 = s => typeof s === 'string' && /hk\.sh|clock\.sh/.test(s);

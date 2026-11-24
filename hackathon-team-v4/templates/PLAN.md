@@ -12,6 +12,8 @@
 - One-line pitch:
 - Demo path (3-5 steps a judge will see):
 - Stack:
+- Scaffold command (official starter/generator):
+- Mocked, not integrated (FAKE:):
 - Owners (directory -> @name):
 - Dev command / local URL:
 - Live URL:
