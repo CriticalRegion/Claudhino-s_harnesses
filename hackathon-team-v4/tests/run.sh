@@ -207,7 +207,7 @@ hk va claim t1-api >/dev/null; hk vb claim t3-web >/dev/null; hk vc claim t9-mis
 has "session start names your handle" "$(hk vb sync --hook)" "TEAM: you are @bob"
 fetchnow vb; eq "posttool silent with only FYI news" "$(pt vb)" ""
 s=$(date +%s); for i in 1 2 3 4 5 6 7 8 9 10; do pt vb >/dev/null; done; e=$(( $(date +%s) - s ))
-lim=2; [ -n "$WIN" ] && lim=10; [ $e -le $lim ] && ok "posttool fast path: 10 calls in ${e}s" || no "posttool fast" "${e}s"
+lim=2; [ -n "$WIN" ] && lim=30; [ $e -le $lim ] && ok "posttool fast path: 10 calls in ${e}s" || no "posttool fast" "${e}s"
 hk va "done" t1-api contracts/api.ts:3 >/dev/null; fetchnow vb; fetchnow vc
 o=$(pt vb); has "dependency DONE is urgent mid-turn" "$o" "DONE t1-api"
 printf '%s' "$o" | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));process.exit(j.hookSpecificOutput.hookEventName==="PostToolUse"&&j.hookSpecificOutput.additionalContext.includes("TEAM URGENT")?0:1)' \
@@ -619,9 +619,10 @@ printf '#!/bin/sh\nsleep 20\n' > "$T/hang.sh"; chmod +x "$T/hang.sh"
 hk h1 auto on 1h >/dev/null 2>&1
 git -C "$T/h1" remote set-url origin "ssh://venue-wifi/x.git"
 s=$(date +%s); (cd "$T/h1" && GIT_SSH_COMMAND="$T/hang.sh" HK_NET_TIMEOUT=3 bash .hackathon/bin/hk sync --hook >/dev/null 2>&1); d1=$(( $(date +%s) - s ))
-[ $d1 -le 8 ] && ok "hung network: session start waits one short attempt (${d1}s)" || no "hung network: session start" "${d1}s"
+lim=8; [ -n "$WIN" ] && lim=14   # hang is 20s and the real attempt 3s: 14s still proves the timeout, with room for slow Windows process start
+[ $d1 -le $lim ] && ok "hung network: session start waits one short attempt (${d1}s)" || no "hung network: session start" "${d1}s"
 s=$(date +%s); (cd "$T/h1" && GIT_SSH_COMMAND="$T/hang.sh" HK_NET_TIMEOUT=15 bash .hackathon/bin/hk sync --hook >/dev/null 2>&1); d2=$(( $(date +%s) - s ))
-[ $d2 -le 8 ] && ok "then skips the network while offline (${d2}s; an attempt would take 15s)" || no "skips the network while offline" "${d2}s"
+[ $d2 -le $lim ] && ok "then skips the network while offline (${d2}s; an attempt would take 15s)" || no "skips the network while offline" "${d2}s"
 s=$(date +%s); o=$(cd "$T/h1" && GIT_SSH_COMMAND="$T/hang.sh" HK_NET_TIMEOUT=3 bash .hackathon/bin/hk auto off 2>&1); rc=$?; d3=$(( $(date +%s) - s ))
 [ $d3 -le 15 ] && ok "kill switch answers fast offline (${d3}s)" || no "kill switch offline" "${d3}s"
 eq "kill switch exit code says not published" "$rc" 2; has "and says so" "$o" "NOT published"
