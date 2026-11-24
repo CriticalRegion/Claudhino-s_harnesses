@@ -826,7 +826,7 @@ has "map: python defs" "$M" "api.py: shorten, Store"; hasnt "map: binaries skipp
 for i in $(seq 1 160); do printf 'x\n' > "$T/qa/src/f$i.txt"; done; (cd "$T/qa" && git add src && git commit -qm many >/dev/null 2>&1)
 hk qa map >/dev/null; has "map: capped with a pointer" "$(cat "$T/qa/.hackathon/MAP.md")" "more files (git ls-files)"
 [ "$(wc -l < "$T/qa/.hackathon/MAP.md")" -le 152 ] && ok "map: at most ~150 lines" || no "map: at most ~150 lines"
-rm -f "$T/qa/.hackathon/MAP.md"; (cd "$T/qa" && git commit -q --allow-empty -m "beat" && sleep 2); [ -f "$T/qa/.hackathon/MAP.md" ] && ok "map: post-commit refreshes it" || no "map: post-commit refreshes it"
+rm -f "$T/qa/.hackathon/MAP.md"; (cd "$T/qa" && git commit -q --allow-empty -m "beat"); for i in $(seq 1 30); do [ -f "$T/qa/.hackathon/MAP.md" ] && break; sleep 0.5; done; [ -f "$T/qa/.hackathon/MAP.md" ] && ok "map: post-commit refreshes it" || no "map: post-commit refreshes it"
 eq "map: MAP.md is gitignored" "$(cd "$T/qa" && git check-ignore -q .hackathon/MAP.md && echo yes)" yes
 # usage per task
 hk qa add t-lean "files: src/page.tsx; done: smoke green" >/dev/null; hk qa claim t-lean >/dev/null

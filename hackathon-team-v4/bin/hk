@@ -143,7 +143,7 @@ flail_sid(){ # hook JSON -> per-agent key (a subagent counts its own failures)
   printf '%s' "${a:-main}"; }
 flail_key(){ # hook JSON -> checksum of the Bash command, numbers and whitespace normalised (fails if it isn't Bash)
   local c; printf '%s' "$1" | grep -q '"tool_name"[[:space:]]*:[[:space:]]*"Bash"' || return 1
-  c=$(printf '%s' "$1" | tr '\n' ' ' | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\(\([^"\\]\|\\.\)*\)".*/\1/p')
+  c=$(printf '%s' "$1" | tr '\n' ' ' | sed -En 's/.*"command"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)".*/\1/p')   # -E: BSD sed has no \|
   [ -n "$c" ] || return 1
   printf '%s' "$c" | tr -s ' \t' ' ' | sed 's/[0-9][0-9]*/N/g' | cksum | cut -d' ' -f1; }
 
