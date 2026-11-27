@@ -19,3 +19,4 @@
 | guard | on |
 | stop_check | on |
 | ideation | off |
+| discord_thread | 1576011045523161270 |
