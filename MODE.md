@@ -4,3 +4,17 @@
 | auto_until | 0 |
 | solo | - |
 | solo_until | 0 |
+| profile | careful |
+| lean | off |
+| demo_first | off |
+| collision | refuse |
+| reviewer | on |
+| wake_cap | 3 |
+| prepush | on |
+| autoapprove | off |
+| auto_budget | 3h |
+| stale_min | 60 |
+| polish_at | 240 |
+| freeze_at | 90 |
+| guard | on |
+| stop_check | on |
