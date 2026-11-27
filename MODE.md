@@ -18,3 +18,4 @@
 | freeze_at | 90 |
 | guard | on |
 | stop_check | on |
+| ideation | off |
