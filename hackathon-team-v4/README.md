@@ -8,9 +8,10 @@ A Claude Code plugin for hackathon teams of 1-4 people, each with their own agen
 ```
 ## Every hackathon
 1. In the project (a git repo with a remote): `/hackathon:setup` - the interview: event, deadline, judging criteria, team; profile (**sprint** / **crunch** / **careful**) and any toggles; Discord. It installs the project pieces, joins or creates the team board and commits.
-2. `/hackathon:research <event URL>` (optional), then `/hackathon:kickoff` - ideas on Opus, scored by the `judge`; **you pick**, then a lean plan and the first board task.
-3. Build: `/hackathon:slice`, `/hackathon:sync`, `/hackathon:claim <id>`, `/hackathon:handoff <id> <path:line>`, `/hackathon:demo-check`.
-4. Last hour: `/hackathon:ship`. Afterwards: `/hackathon:postmortem` (lessons every future kickoff reads).
+2. `/hackathon:research <event URL>` (optional), then `/hackathon:kickoff` - ideas on Opus, scored by the `judge`; **you pick**, then a lean plan and the first board tasks (scaffold, contracts, design).
+3. UI owner: `/hackathon:design` - the `designer` agent (Opus, Anthropic's frontend-design skill bundled) locks `.hackathon/DESIGN.md` (screens, copy, tokens, components) before anyone builds a screen. `/hackathon:design check` reviews the running app against it.
+4. Build: `/hackathon:slice`, `/hackathon:sync`, `/hackathon:claim <id>`, `/hackathon:handoff <id> <path:line>`, `/hackathon:demo-check`.
+5. Last hour: `/hackathon:ship`. Afterwards: `/hackathon:postmortem` (lessons every future kickoff reads).
 
 Teammates: install the plugin, open the project, run `/hackathon:setup` (only asks their name and Discord).
 
@@ -28,7 +29,7 @@ Teammates: install the plugin, open the project, run `/hackathon:setup` (only as
 | `hk discord <webhook> --global` | Post every event to a Discord forum, one post per hackathon |
 
 ## Commands
-`setup` `research` `kickoff` `pivot` `slice` `sync` `claim` `handoff` `verify` `build-fix` `checkpoint` `demo-check` `cut` `pitch` `ship` `security-scan` `cost` `status` `postmortem` `pause` `resume` `off` `night` `review` `goal-check` (all `/hackathon:<name>`). Agents: `scout` (Haiku), `judge` (Opus), `deep` (Opus escalation), `build-fixer`, `reviewer`, `critic` (night-shift reviews).
+`setup` `research` `kickoff` `pivot` `design` `slice` `sync` `claim` `handoff` `verify` `build-fix` `checkpoint` `demo-check` `cut` `pitch` `ship` `security-scan` `cost` `status` `postmortem` `pause` `resume` `off` `night` `review` `goal-check` (all `/hackathon:<name>`). Agents: `scout` (Haiku), `judge` (Opus), `deep` (Opus escalation), `build-fixer`, `reviewer`, `critic` (night-shift reviews), `designer` (Opus: locks and checks the UI design).
 
 ## Test it
-`bash hackathon-team-v4/tests/run.sh` - 679 end-to-end checks (the engine, events, races, offline, modes, the night shift, guard, monitor, stop check, settings, pause/off, rules injection, usage log, v3 migration, the launcher), run in CI on Linux, macOS and Windows. Setup, kickoff, pause/resume and a plugin-less session were also checked live in Claude Code. Builds on v3.1 and hackathon-hybrid-v1 (see GUIDE section 12); parts adapted from [ECC](https://github.com/affaan-m/ECC) (MIT, [notices](THIRD_PARTY_NOTICES.md)).
+`bash hackathon-team-v4/tests/run.sh` - 679 end-to-end checks (the engine, events, races, offline, modes, the night shift, guard, monitor, stop check, settings, pause/off, rules injection, usage log, v3 migration, the launcher), run in CI on Linux, macOS and Windows. Setup, kickoff, pause/resume and a plugin-less session were also checked live in Claude Code. Builds on v3.1 and hackathon-hybrid-v1 (see GUIDE section 12); parts adapted from [ECC](https://github.com/affaan-m/ECC) (MIT); Anthropic's frontend-design skill is bundled under Apache-2.0 ([notices](THIRD_PARTY_NOTICES.md)).

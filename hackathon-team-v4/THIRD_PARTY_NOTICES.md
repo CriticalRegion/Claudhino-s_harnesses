@@ -1,5 +1,10 @@
 # Third-party notices
 
+## Anthropic frontend-design skill
+`skills/frontend-design/SKILL.md` is Anthropic's frontend-design skill, copied unchanged from
+https://github.com/anthropics/skills (skills/frontend-design, commit e4bb5d9). It is licensed under the Apache License 2.0;
+the full licence is in `skills/frontend-design/LICENSE.txt`. The `designer` agent reads it with `hk skill frontend-design`.
+
 ## ECC (Everything Claude Code)
 Parts of this plugin are adapted from ECC, https://github.com/affaan-m/ECC: the destructive-command classifier
 (GateGuard), block-no-verify, config protection, the dev-server block, strategic compaction, the context monitor and

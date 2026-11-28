@@ -15,6 +15,9 @@
 - Scaffold command (official starter/generator):
 - Mocked, not integrated (FAKE:):
 - Owners (directory -> @name):
+- UI owner (only they change the theme; runs /hackathon:design):
+- Contracts (shared ids, schemas, API shapes -> contracts/):
+- Design: .hackathon/DESIGN.md (locked before any screen is built)
 - Dev command / local URL:
 - Live URL:
 - Milestones (clock time): [ ] M1 deployed skeleton  [ ] M2 vertical slice  [ ] M3 polish  [ ] M4 demo recorded

@@ -1009,4 +1009,36 @@ has "an agent may stop the shift" "$(hk n2 night stop)" "NIGHT OFF (stopped by @
 has "nobody's left in night mode" "$(rs MODE.md)" "| night | off |"
 hasnt "the team's guard setting is back" "$(rs MODE.md)" "| guard | on |"
 
+echo "# 4.3: design lock, bundled skill, identity check, default team rules"
+o=$(cd / && bash "$HARN/bin/hk" skill 2>&1); has "hk skill prints the bundled frontend-design guide from anywhere" "$o" "# Frontend Design"
+o=$(cd / && bash "$HARN/bin/hk" skill nope 2>&1); rc=$?; has "unknown skill: names the bundled ones" "$o" "frontend-design"; [ $rc = 1 ] && ok "unknown skill exits 1" || no "unknown skill exits 1" "rc=$rc"
+for f in agents/designer.md commands/design.md rules/design.md skills/frontend-design/SKILL.md skills/frontend-design/LICENSE.txt templates/rules/restyle.md; do
+  [ -f "$HARN/$f" ] && ok "plugin has $f" || no "plugin has $f"; done
+has "designer runs on Opus" "$(head -6 "$HARN/agents/designer.md")" "model: opus"
+has "designer reads the bundled guide" "$(cat "$HARN/agents/designer.md")" "hk skill frontend-design"
+has "design command uses the designer" "$(cat "$HARN/commands/design.md")" "designer"
+has "skill licence notice" "$(cat "$HARN/THIRD_PARTY_NOTICES.md")" "Apache License 2.0"
+has "rules: design rules injected" "$(hk qa rules)" "DESIGN.md"
+has "rules: reference code stays out of the repo" "$(hk qa rules)" ".hackathon/ref/"
+git init -q "$T/d1"; (cd "$T/d1" && git commit -q --allow-empty -m init)
+o=$(cd "$T/d1" && git config user.name YourUsername && git config user.email you@example.com && HK_ROOT="$T/d1" bash "$HARN/bin/hk" install-project --mcp none 2>&1)
+has "install-project flags a placeholder name" "$o" "user.name is 'YourUsername'"
+has "install-project flags a placeholder email" "$o" "user.email is 'you@example.com'"
+has "id-check repeats the warning" "$(cd "$T/d1" && bash .hackathon/bin/hk id-check 2>&1)" "GIT IDENTITY"
+(cd "$T/d1" && git config user.name "Ada Lovelace" && git config user.email ada@uni.ac.uk)
+eq "id-check quiet for a real identity" "$(cd "$T/d1" && bash .hackathon/bin/hk id-check 2>&1)" ""
+hasnt "install-project quiet for a real identity" "$(HK_ROOT="$T/d1" bash "$HARN/bin/hk" install-project --mcp none 2>&1)" "GIT IDENTITY"
+has "PLAN template names a UI owner" "$(cat "$T/d1/.hackathon/PLAN.md")" "UI owner"
+has "PLAN template names the contracts" "$(cat "$T/d1/.hackathon/PLAN.md")" "Contracts"
+has "reference code is gitignored" "$(cat "$T/d1/.gitignore")" ".hackathon/ref/"
+mkdir -p "$T/d1/.hackathon/ref/blueprint"; echo x > "$T/d1/.hackathon/ref/blueprint/a.py"
+eq "git ignores .hackathon/ref" "$(cd "$T/d1" && git status --porcelain --untracked-files=all | grep -c 'hackathon/ref')" 0
+[ -f "$T/d1/.hackathon/rules/restyle.md" ] && ok "default restyle rule installed" || no "default restyle rule installed"
+printf 'mine\n' > "$T/d1/.hackathon/rules/restyle.md"; HK_ROOT="$T/d1" bash "$HARN/bin/hk" install-project --mcp none >/dev/null 2>&1
+eq "a team's edited rule is kept" "$(cat "$T/d1/.hackathon/rules/restyle.md")" "mine"
+cp "$HARN/templates/rules/restyle.md" "$T/qa/.hackathon/rules/restyle.md"
+o=$(pre qa Bash "" "git commit -m 'ui: restyle to Dribbble look'"); has "restyle commit gets a warning" "$o" "looks like a restyle"; hasnt "restyle rule doesn't block" "$o" deny
+eq "ordinary commits pass" "$(pre qa Bash "" "git commit -m 'fix: basket total'")" ""
+rm -f "$T/qa/.hackathon/rules/restyle.md"
+
 echo; echo "passed $pass, failed $fail"; [ $fail = 0 ]

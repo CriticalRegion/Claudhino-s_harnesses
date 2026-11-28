@@ -40,3 +40,5 @@ dist/
 .vercel/
 .hackathon/notes/
 .hackathon/rev/
+# reference code (blueprints, example repos): clone it here, never commit it into the project
+.hackathon/ref/
