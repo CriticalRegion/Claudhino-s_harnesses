@@ -1,0 +1,9 @@
+---
+description: Lock the UI design before anyone builds screens (designer agent on Opus), redesign it whenever you want, or check the running app against it
+argument-hint: [revise <why> | check [url]]
+model: opus
+---
+Input: $ARGUMENTS
+- **Empty (lock)**: needs a chosen idea and a demo path in `.hackathon/PLAN.md`; if they're missing, say "run /hackathon:kickoff first" and stop. If `.hackathon/DESIGN.md` already says `Status: LOCKED`, show its direction and screens in 3 lines and stop (changes go through `revise`). Otherwise give the `designer` agent a brief: mode lock, PLAN.md's pitch, demo path, stack, judging criteria and UI owner. When it reports, check that DESIGN.md says `Status: LOCKED`, then `git add .hackathon/DESIGN.md <the token files it changed> && git commit -m "design: lock"`, and push if there's an upstream (`git pull --rebase --autostash` first). Team board set up: `hk decide "DESIGN LOCKED: <direction in one line>. UI owner @x. Build every screen against .hackathon/DESIGN.md"`, and `hk done t1-design .hackathon/DESIGN.md:1` if you hold that task. Report in at most 5 lines: the direction, the screens, the memorable element, and what to build next.
+- **`revise <why>`**: the UI owner (PLAN.md), or anyone with the human's OK; as many times as the humans want. Give the designer mode revise with the reason, commit `design: revision - <why>`, push, and `hk decide` the change so everyone restyles against the new DESIGN.md. Late in the event, mention the time left in one line, but don't refuse.
+- **`check [url]`**: the URL from the input, else PLAN.md's Live URL, else the local dev URL (start the dev server as the rules say if it isn't running). Give the designer mode check. Show its verdict and findings; don't fix anything here. Each fix goes to the owner of that screen (or do it yourself if you're solo).
