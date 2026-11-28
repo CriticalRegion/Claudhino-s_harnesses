@@ -21,7 +21,7 @@
 # Discord      discord <webhook-url> [--global] | off [--global] | test | status
 # Setup        install-project [--model m] [--mcp github,vercel|none] [--ponytail on|off]
 #              migrate-v3 [--apply]
-#              skill [frontend-design]   (print a guide bundled with the plugin; the designer agent reads it)
+#              skill [frontend-design|unslop] [--path]   (print a guide bundled with the plugin, or its folder; the designer agent reads them)
 # Hooks        session-start, rules, peek, posttool, pretool, watch (exit 2 = wake), permit,
 #              autostop, contract, _cost, _beat, _bgfetch, _post, _mergeboard
 #
@@ -34,7 +34,9 @@ SELF=$PLUGIN/bin/hk
 CMD=${1:-}; [ $# -gt 0 ] && shift
 if [ "$CMD" = skill ]; then   # a design or build guide bundled with the plugin (works anywhere, no project needed)
   n=${1:-frontend-design}; f=$PLUGIN/skills/$n/SKILL.md
-  [ -f "$f" ] || { echo "hk: no bundled skill '$n' (bundled: $(ls "$PLUGIN/skills" 2>/dev/null | tr '\n' ' '))"; exit 1; }
+  case $n in */*|.*) f=;; esac   # a bundled name only: no path tricks
+  [ -n "$f" ] && [ -f "$f" ] || { echo "hk: no bundled skill '$n' (bundled: $(ls "$PLUGIN/skills" 2>/dev/null | tr '\n' ' '))"; exit 1; }
+  [ "${2:-}" = --path ] && { echo "$PLUGIN/skills/$n"; exit 0; }   # the skill's folder, for the files its guide points to (references/, scripts/)
   tr -d '\r' < "$f"; exit 0
 fi
 HOOKCMDS=" session-start rules peek posttool pretool watch permit autostop contract flail _cost _beat _bgfetch _post _map "

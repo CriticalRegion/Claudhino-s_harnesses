@@ -9,7 +9,7 @@ A Claude Code plugin for hackathon teams of 1-4 people, each with their own agen
 ## Every hackathon
 1. In the project (a git repo with a remote): `/hackathon:setup` - the interview: event, deadline, judging criteria, team; profile (**sprint** / **crunch** / **careful**) and any toggles; Discord. It installs the project pieces, joins or creates the team board and commits.
 2. `/hackathon:research <event URL>` (optional), then `/hackathon:kickoff` - ideas on Opus, scored by the `judge`; **you pick**, then a lean plan and the first board tasks (scaffold, contracts, design).
-3. UI owner: `/hackathon:design` - the `designer` agent (Opus, Anthropic's frontend-design skill bundled) locks `.hackathon/DESIGN.md` (screens, copy, tokens, components) before anyone builds a screen. `/hackathon:design check` reviews the running app against it.
+3. UI owner: `/hackathon:design` - the `designer` agent (Opus, Anthropic's frontend-design skill and Damir Sokolovsky's unslop skill bundled) locks `.hackathon/DESIGN.md` (screens, copy, tokens, components) before anyone builds a screen. `/hackathon:design unslop [screen]` cleans up AI-looking craft inside the locked design; `/hackathon:design check` reviews the running app against it.
 4. Build: `/hackathon:slice`, `/hackathon:sync`, `/hackathon:claim <id>`, `/hackathon:handoff <id> <path:line>`, `/hackathon:demo-check`.
 5. Last hour: `/hackathon:ship`. Afterwards: `/hackathon:postmortem` (lessons every future kickoff reads).
 

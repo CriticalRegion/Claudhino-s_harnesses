@@ -5,6 +5,13 @@
 https://github.com/anthropics/skills (skills/frontend-design, commit e4bb5d9). It is licensed under the Apache License 2.0;
 the full licence is in `skills/frontend-design/LICENSE.txt`. The `designer` agent reads it with `hk skill frontend-design`.
 
+## unslop skill
+`skills/unslop/` is the unslop skill by Damir Sokolovsky (@heydamir), https://github.com/heydamir/unslop (commit 620163e),
+copied unchanged (the licence file added alongside it as `skills/unslop/LICENSE`). It is licensed under Creative Commons
+Attribution 4.0 International (CC BY 4.0, https://creativecommons.org/licenses/by/4.0/); the licence text is in
+`skills/unslop/LICENSE`. The harness changes nothing in it. The `designer` agent reads it with `hk skill unslop`;
+`/hackathon:design unslop` runs it inside the locked design.
+
 ## ECC (Everything Claude Code)
 Parts of this plugin are adapted from ECC, https://github.com/affaan-m/ECC: the destructive-command classifier
 (GateGuard), block-no-verify, config protection, the dev-server block, strategic compaction, the context monitor and

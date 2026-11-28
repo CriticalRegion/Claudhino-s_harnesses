@@ -1055,6 +1055,16 @@ has "designer runs on Opus" "$(head -6 "$HARN/agents/designer.md")" "model: opus
 has "designer reads the bundled guide" "$(cat "$HARN/agents/designer.md")" "hk skill frontend-design"
 has "design command uses the designer" "$(cat "$HARN/commands/design.md")" "designer"
 has "skill licence notice" "$(cat "$HARN/THIRD_PARTY_NOTICES.md")" "Apache License 2.0"
+o=$(cd / && bash "$HARN/bin/hk" skill unslop 2>&1); has "hk skill unslop prints the bundled skill" "$o" "# Unslop"
+o=$(cd / && bash "$HARN/bin/hk" skill unslop --path 2>&1); eq "hk skill unslop --path prints the folder" "$o" "$HARN/skills/unslop"
+[ -f "$o/references/signs.md" ] && ok "unslop: the references its guide points to ship with it" || no "unslop: references/signs.md missing"
+for bad in ../agents/designer ../../etc x/y .hidden; do o=$(cd / && bash "$HARN/bin/hk" skill "$bad" 2>&1); rc=$?; [ $rc = 1 ] && ok "hk skill refuses '$bad'" || no "hk skill refuses '$bad'" "rc=$rc $o"; done
+for f in skills/unslop/SKILL.md skills/unslop/LICENSE skills/unslop/references/signs.md skills/unslop/references/tokens.md; do [ -s "$HARN/$f" ] && ok "bundled: $f" || no "bundled: $f"; done
+has "unslop licence is CC BY 4.0" "$(head -n1 "$HARN/skills/unslop/LICENSE")" "Attribution 4.0 International"
+has "unslop notice credits the author and licence" "$(cat "$HARN/THIRD_PARTY_NOTICES.md")" "Damir Sokolovsky"
+has "designer reads unslop" "$(cat "$HARN/agents/designer.md")" "hk skill unslop"
+has "design command has an unslop mode" "$(cat "$HARN/commands/design.md")" "unslop [screen]"
+has "design rules keep unslop inside the tokens" "$(cat "$HARN/rules/design.md")" "/hackathon:design unslop"
 has "rules: design rules injected" "$(hk qa rules)" "DESIGN.md"
 has "rules: reference code stays out of the repo" "$(hk qa rules)" ".hackathon/ref/"
 git init -q "$T/d1"; (cd "$T/d1" && git commit -q --allow-empty -m init)

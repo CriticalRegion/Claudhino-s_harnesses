@@ -5,3 +5,4 @@ Design (judges decide on the UI in the first 10 seconds; restyling the same scre
 4. Don't like the design? Redesign as often as the humans want, but through `/hackathon:design revise <why>`, so DESIGN.md and the tokens stay the one source everyone builds from. No ad-hoc "restyle" or "new palette" passes outside it.
 5. After a UI change, screenshot that screen (Playwright) and compare it with DESIGN.md before committing; `/hackathon:design check` reviews the whole app.
 6. One stack: never rewrite the frontend in another framework after the first milestone. Improve the one you have.
+7. The bundled `unslop` skill (AI-looking UI to designed UI) runs through `/hackathon:design unslop`, inside DESIGN.md's tokens. Don't start it on your own to restyle a screen, and never to change the palette or type.
