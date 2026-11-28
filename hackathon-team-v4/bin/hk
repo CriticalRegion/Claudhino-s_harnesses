@@ -21,6 +21,7 @@
 # Discord      discord <webhook-url> [--global] | off [--global] | test | status
 # Setup        install-project [--model m] [--mcp github,vercel|none] [--ponytail on|off]
 #              migrate-v3 [--apply]
+#              skill [frontend-design]   (print a guide bundled with the plugin; the designer agent reads it)
 # Hooks        session-start, rules, peek, posttool, pretool, watch (exit 2 = wake), permit,
 #              autostop, contract, _cost, _beat, _bgfetch, _post, _mergeboard
 #
@@ -31,6 +32,11 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_
 PLUGIN=$(cd "$(dirname "$0")/.." && pwd -P) || exit 1
 SELF=$PLUGIN/bin/hk
 CMD=${1:-}; [ $# -gt 0 ] && shift
+if [ "$CMD" = skill ]; then   # a design or build guide bundled with the plugin (works anywhere, no project needed)
+  n=${1:-frontend-design}; f=$PLUGIN/skills/$n/SKILL.md
+  [ -f "$f" ] || { echo "hk: no bundled skill '$n' (bundled: $(ls "$PLUGIN/skills" 2>/dev/null | tr '\n' ' '))"; exit 1; }
+  tr -d '\r' < "$f"; exit 0
+fi
 HOOKCMDS=" session-start rules peek posttool pretool watch permit autostop contract flail _cost _beat _bgfetch _post _map "
 quiet_cmd(){ case "$HOOKCMDS" in *" $CMD "*) return 0;; esac
   { [ "$CMD" = sync ] && [ "${1:-}" = --hook ]; } || { [ "$CMD" = clock ] && [ -n "${1:-}" ]; }; }
@@ -549,6 +555,11 @@ GCONF=${XDG_CONFIG_HOME:-$HOME/.config}/hackathon-harness
 # Never auto-approved in autonomous mode (see permit): destructive git, recursive rm, sudo, piping downloads into a shell,
 # and the commands that switch the agents' own modes.
 RISKY='git[[:space:]]+(reset[[:space:]]+--hard|clean|restore|checkout[[:space:]]+(--|\.)|branch[[:space:]]+-D|push.*(--force|[[:space:]]-f|[[:space:]]\+))|(^|[;&|[:space:]"])rm[[:space:]]+(-[a-zA-Z]*[rR]|--recursive)|(^|[;&|[:space:]"])sudo[[:space:]]|\|[[:space:]]*(ba|z)?sh([[:space:]"]|$)|hk(\.sh)?[[:space:]]+(auto|solo|demo-first|config|pause|resume|off|archive|night[[:space:]]+start)|claude[[:space:]]+plugin'
+id_check(){ # commits by a placeholder identity credit nobody (RetailHack26: 17 commits by "YourUsername")
+  local n e; n=$(gm config user.name 2>/dev/null); e=$(gm config user.email 2>/dev/null)
+  case "$n" in ''|YourUsername|"Your Name"|yourname|username|user|root) echo "GIT IDENTITY: user.name is '${n:-unset}'. Set your real name in this repo: git config user.name \"First Last\"";; esac
+  case "$e" in ''|*example.com|you@*|*@localhost) echo "GIT IDENTITY: user.email is '${e:-unset}'. Use the email of your GitHub account: git config user.email \"you@...\"";; esac
+  return 0; }
 human_only(){ # modes that widen what agents may do are switched on by humans, not by an agent's own shell
   [ -n "${CLAUDECODE:-}" ] || return 0
   die "hk: '$1' must be switched on by a human: run it in your own terminal, not through Claude Code. (Agents may still turn it off.)"; }
@@ -1243,6 +1254,7 @@ rules) # the active rule set (injected at session start and after /compact)
   cat "$RD/core.md"
   if [ "$(eff_demo)" = off ]; then cat "$RD/build-properly.md"; else cat "$RD/demo-first.md"; fi
   cat "$RD/always.md"
+  cat "$RD/design.md"
   [ "$(cfg lean)" = on ] && cat "$RD/lean.md"
   inited && cat "$RD/team.md"
   { auto_on || { s=$(mode_get solo); [ -n "$s" ] && [ "$s" != - ]; }; } && cat "$RD/autonomous.md"
@@ -1323,6 +1335,8 @@ status)
   echo "usage (this clone):"; bash "$SELF" cost | sed 's/^/ /'
   bash "$SELF" discord status 2>/dev/null | head -n1 ;;
 
+id-check) id_check ;;
+
 install-project) # copy the project-side pieces; merge settings; idempotent
   model=""; mcp=github,vercel; pony=on   # model: the project's own setting wins unless --model is given
   while [ $# -gt 0 ]; do case $1 in --model) model=${2:-}; shift 2;; --mcp) mcp=${2:-none}; shift 2;; --ponytail) pony=${2:-on}; shift 2;; *) die "usage: hk install-project [--model m] [--mcp github,vercel|none] [--ponytail on|off]";; esac; done
@@ -1332,6 +1346,7 @@ install-project) # copy the project-side pieces; merge settings; idempotent
     if [ ! -e "$dst" ] || grep -q 'hackathon' "$dst" 2>/dev/null; then tr -d '\r' < "$T/githooks/$gh" > "$dst"; chmod +x "$dst"
     else echo "kept your .githooks/$gh (add the harness lines from $T/githooks/$gh by hand if you want them)"; fi; done
   for f in PLAN.md IDEAS.md deadline; do [ -e "$H/$f" ] || tr -d '\r' < "$T/$f" > "$H/$f"; done
+  mkdir -p "$H/rules"; for f in "$T"/rules/*.md; do [ -e "$H/rules/${f##*/}" ] || tr -d '\r' < "$f" > "$H/rules/${f##*/}"; done   # default team rules (yours are kept)
   for f in gitignore gitattributes; do dst=$ROOT/.$f; touch "$dst"; [ -z "$(tail -c1 "$dst")" ] || echo >> "$dst"
     while IFS= read -r line; do line=${line%$'\r'}; [ -n "$line" ] || continue; grep -qxF -- "$line" "$dst" || echo "$line" >> "$dst"; done < "$T/$f"; done
   if command -v node >/dev/null 2>&1; then
@@ -1342,7 +1357,8 @@ install-project) # copy the project-side pieces; merge settings; idempotent
   else
     echo "SETTINGS NOT MERGED (node not found): merge $T/settings.json into .claude/settings.json by hand (set \"model\": \"$model\")."
   fi
-  echo "installed: .hackathon/bin/hk (launcher), .githooks, .hackathon/PLAN.md, IDEAS.md, deadline, .gitignore/.gitattributes lines" ;;
+  echo "installed: .hackathon/bin/hk (launcher), .githooks, .hackathon/PLAN.md, IDEAS.md, deadline, team rules (.hackathon/rules), .gitignore/.gitattributes lines"
+  id_check ;;
 
 migrate-v3) # find (and with --apply remove) v3's copied harness files, which would double every hook
   found=""
