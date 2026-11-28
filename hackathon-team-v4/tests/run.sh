@@ -170,7 +170,7 @@ has "from state dir" "$(cd "$T/bob/.hackathon/state" && bash ../bin/hk board)" "
 echo "# peek never blocks"
 git -C "$T/bob" remote set-url origin "http://10.255.255.1/x.git"; rm -f "$T/bob/.hackathon/.fetched"
 s=$(date +%s); hk bob peek >/dev/null; e=$(( $(date +%s) - s ))
-lim=1; [ -n "$WIN" ] && lim=3; [ $e -le $lim ] && ok "peek returns in ${e}s with unreachable remote" || no "peek fast" "${e}s"
+lim=1; [ -n "$WIN" ] && lim=3; [ "$(uname -s)" = Darwin ] && lim=4; [ $e -le $lim ] && ok "peek returns in ${e}s with unreachable remote" || no "peek fast" "${e}s"
 git -C "$T/bob" remote set-url origin "$T/remote.git"
 
 echo "# relative remote URL (remote path resolved from repo root, not the state dir)"
@@ -207,7 +207,8 @@ hk va claim t1-api >/dev/null; hk vb claim t3-web >/dev/null; hk vc claim t9-mis
 has "session start names your handle" "$(hk vb sync --hook)" "TEAM: you are @bob"
 fetchnow vb; eq "posttool silent with only FYI news" "$(pt vb)" ""
 s=$(date +%s); for i in 1 2 3 4 5 6 7 8 9 10; do pt vb >/dev/null; done; e=$(( $(date +%s) - s ))
-lim=2; [ -n "$WIN" ] && lim=30; [ $e -le $lim ] && ok "posttool fast path: 10 calls in ${e}s" || no "posttool fast" "${e}s"
+lim=2; [ -n "$WIN" ] && lim=30; [ "$(uname -s)" = Darwin ] && lim=6   # shared macOS CI runners stall for seconds; a real regression (a network call per hook) takes 100s+
+[ $e -le $lim ] && ok "posttool fast path: 10 calls in ${e}s" || no "posttool fast" "${e}s"
 hk va "done" t1-api contracts/api.ts:3 >/dev/null; fetchnow vb; fetchnow vc
 o=$(pt vb); has "dependency DONE is urgent mid-turn" "$o" "DONE t1-api"
 printf '%s' "$o" | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));process.exit(j.hookSpecificOutput.hookEventName==="PostToolUse"&&j.hookSpecificOutput.additionalContext.includes("TEAM URGENT")?0:1)' \
