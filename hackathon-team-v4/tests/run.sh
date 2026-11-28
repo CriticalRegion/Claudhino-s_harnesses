@@ -790,20 +790,39 @@ has "lean rules injected" "$(hk qa rules)" "Lean build"
 o=$(hk qa config profile careful); has "careful: lean off" "$(hk qa config get lean)" off; hasnt "careful: no lean rules" "$(hk qa rules)" "Lean build"
 hk qa config profile crunch >/dev/null; eq "crunch: lean on" "$(hk qa config get lean)" on; hk qa config profile sprint >/dev/null
 eq "bad lean value refused" "$(hkrc qa config set lean=maybe)" 1
-SL="$T/qa/.claude/settings.local.json"; rm -f "$SL" "$T/qa/.hackathon/.lean-applied"
+eq "lean_settings off by default (opt-in)" "$(hk qa config get lean_settings)" off
+eq "bad lean_settings value refused" "$(hkrc qa config set lean_settings=maybe)" 1
+SL="$T/qa/.claude/settings.local.json"; rm -f "$SL" "$T/qa/.hackathon/.lean-applied" "$T/qa/.hackathon/.hh/lean-added.json"
 mkdir -p "$T/qa/.claude"; printf '{"permissions":{"allow":["Bash(make *)"]},"env":{"FOO":"1","MAX_MCP_OUTPUT_TOKENS":"20000"}}\n' > "$SL"
+BEFORE=$(cat "$SL")
 hk qa session-start </dev/null >/dev/null
-eq "lean on: bash output capped" "$(node -p 'require(process.argv[1]).bashOutputMaxChars' "$SL")" 10000
-eq "lean on: unnamed subagents on Haiku" "$(node -p 'require(process.argv[1]).env.CLAUDE_CODE_SUBAGENT_MODEL' "$SL")" haiku
-eq "lean on: Sonnet effort pinned high" "$(node -p 'require(process.argv[1]).effortLevel' "$SL")" high
-eq "lean on: your own value wins" "$(node -p 'require(process.argv[1]).env.MAX_MCP_OUTPUT_TOKENS' "$SL")" 20000
-eq "lean on: your other settings kept" "$(node -p 'require(process.argv[1]).permissions.allow[0]+require(process.argv[1]).env.FOO' "$SL")" "Bash(make *)1"
-has "config set lean=off says when it applies" "$(hk qa config set lean=off)" "from your next session"
-eq "lean off: our keys removed" "$(node -p 'const j=require(process.argv[1]); [j.bashOutputMaxChars,j.effortLevel,j.env.CLAUDE_CODE_SUBAGENT_MODEL].join(",")' "$SL")" ",,"
-eq "lean off: yours kept" "$(node -p 'const j=require(process.argv[1]); j.env.FOO+j.env.MAX_MCP_OUTPUT_TOKENS+j.permissions.allow[0]' "$SL")" "120000Bash(make *)"
+eq "default: your settings.local.json is left untouched" "$(cat "$SL")" "$BEFORE"
+rm -f "$T/qa/.hackathon/.lean-applied"
+o=$(hk qa config set lean_settings=on); has "lean_settings=on says when it applies" "$o" "from your next session"; has "lean_settings=on lists what it writes" "$o" "bashOutputMaxChars=10000"
+eq "lean_settings on: bash output capped" "$(node -p 'require(process.argv[1]).bashOutputMaxChars' "$SL")" 10000
+eq "lean_settings on: unnamed subagents on Haiku" "$(node -p 'require(process.argv[1]).env.CLAUDE_CODE_SUBAGENT_MODEL' "$SL")" haiku
+eq "lean_settings on: Sonnet effort pinned high" "$(node -p 'require(process.argv[1]).effortLevel' "$SL")" high
+eq "lean_settings on: your own value wins" "$(node -p 'require(process.argv[1]).env.MAX_MCP_OUTPUT_TOKENS' "$SL")" 20000
+eq "lean_settings on: your other settings kept" "$(node -p 'require(process.argv[1]).permissions.allow[0]+require(process.argv[1]).env.FOO' "$SL")" "Bash(make *)1"
+eq "lean_settings on: a manifest records only what we added" "$(node -p 'require(process.argv[1]).sort().join(",")' "$T/qa/.hackathon/.hh/lean-added.json")" "bashOutputMaxChars,effortLevel,env.CLAUDE_CODE_SUBAGENT_MODEL"
 fetchnow qb; hk qb sync >/dev/null; rm -f "$T/qb/.hackathon/.lean-applied"; hk qb session-start </dev/null >/dev/null
-eq "teammate follows lean=off" "$(node -p 'String(require(process.argv[1]).bashOutputMaxChars)' "$T/qb/.claude/settings.local.json" 2>/dev/null || echo undefined)" undefined
-hk qa config set lean=on >/dev/null; eq "lean back on" "$(node -p 'require(process.argv[1]).bashOutputMaxChars' "$SL")" 10000
+eq "teammate follows lean_settings=on" "$(node -p 'String(require(process.argv[1]).bashOutputMaxChars)' "$T/qb/.claude/settings.local.json" 2>/dev/null || echo undefined)" 10000
+o=$(hk qa config set lean_settings=off); has "lean_settings=off says when it applies" "$o" "from your next session"
+eq "lean_settings off: our keys removed" "$(node -p 'const j=require(process.argv[1]); [j.bashOutputMaxChars,j.effortLevel,j.env.CLAUDE_CODE_SUBAGENT_MODEL].join(",")' "$SL")" ",,"
+eq "lean_settings off: yours kept" "$(node -p 'const j=require(process.argv[1]); j.env.FOO+j.env.MAX_MCP_OUTPUT_TOKENS+j.permissions.allow[0]' "$SL")" "120000Bash(make *)"
+eq "lean_settings off: manifest removed" "$([ -f "$T/qa/.hackathon/.hh/lean-added.json" ] && echo yes || echo no)" no
+fetchnow qb; hk qb sync >/dev/null; hk qb session-start </dev/null >/dev/null
+eq "teammate follows lean_settings=off" "$(node -p 'String(require(process.argv[1]).bashOutputMaxChars)' "$T/qb/.claude/settings.local.json" 2>/dev/null || echo undefined)" undefined
+# a value you set yourself that equals ours survives "off" (only keys we added are removed)
+printf '{"effortLevel":"high","bashOutputMaxChars":10000}\n' > "$SL"; rm -f "$T/qa/.hackathon/.lean-applied"
+hk qa config set lean_settings=on >/dev/null; hk qa config set lean_settings=off >/dev/null
+eq "off keeps your own identical values" "$(node -p 'const j=require(process.argv[1]); j.effortLevel+j.bashOutputMaxChars' "$SL")" "high10000"
+# settings written by 4.2.0-4.2.1 (no manifest, lean on by default) are cleaned up on upgrade
+printf '{"bashOutputMaxChars":10000,"effortLevel":"high","env":{"MAX_MCP_OUTPUT_TOKENS":"8000","CLAUDE_CODE_SUBAGENT_MODEL":"haiku","FOO":"1"}}\n' > "$SL"; echo on > "$T/qa/.hackathon/.lean-applied"
+hk qa session-start </dev/null >/dev/null
+eq "upgrade: old silent settings removed, yours kept" "$(node -p 'const j=require(process.argv[1]); JSON.stringify(j)' "$SL")" '{"env":{"FOO":"1"}}'
+rm -f "$SL" "$T/qa/.hackathon/.lean-applied"; hk qa session-start </dev/null >/dev/null
+eq "off with no file creates no file" "$([ -f "$SL" ] && echo yes || echo no)" no
 # flail guard
 fl(){ printf '{"session_id":"sf","tool_name":"Bash","tool_input":{"command":"%s"},"error":"exit 1"}' "$2" | hk "$1" flail; }
 eq "flail: first failure is silent" "$(fl qa 'npm run build 2>&1 | tail -40')" ""
@@ -831,7 +850,9 @@ rm -f "$T/qa/.hackathon/MAP.md"; (cd "$T/qa" && git commit -q --allow-empty -m "
 eq "map: MAP.md is gitignored" "$(cd "$T/qa" && git check-ignore -q .hackathon/MAP.md && echo yes)" yes
 # usage per task
 hk qa add t-lean "files: src/page.tsx; done: smoke green" >/dev/null; hk qa claim t-lean >/dev/null
-has "claim snapshots usage" "$(cat "$T/qa/.hackathon/.cost/claim-t-lean.snap")" " "
+for i in $(seq 1 60); do [ -f "$T/qa/.hackathon/.cost/claim-t-lean.snap" ] && break; sleep 0.25; done   # the snapshot is taken in the background
+has "claim snapshots usage (in the background)" "$(cat "$T/qa/.hackathon/.cost/claim-t-lean.snap")" " "
+eq "claim leaves no partial snapshot files" "$(ls "$T/qa/.hackathon/.cost" | grep -c 'claim-t-lean.snap\.')" 0
 printf '%s\n' '{"type":"assistant","message":{"id":"msg_9","model":"claude-sonnet-5-5","usage":{"input_tokens":1000,"cache_creation_input_tokens":2000,"cache_read_input_tokens":40000,"output_tokens":3000}}}' > "$T/tx/s9.jsonl"
 (cd "$T/qa" && printf '{"session_id":"s9","transcript_path":"%s"}' "$T/tx/s9.jsonl" | bash .hackathon/bin/hk _cost)
 hk qa done t-lean src/page.tsx:1 >/dev/null
@@ -849,12 +870,28 @@ eq "HK_CLEAR_AT moves the threshold" "$(HK_CLEAR_AT=40000 dn d4 "$TRS" 'hk done 
 hk qa config set lean=off >/dev/null; eq "lean off: no context advice" "$(dn d5 "$TRB" 'hk done t1 x' | grep -c 'CONTEXT OK\|FRESH CONTEXT')" 0; hk qa config set lean=on >/dev/null
 # usage per task comes live from the transcripts when Claude Code's folder is found
 CC="$T/ccfg"; TD="$CC/projects/$(printf '%s' "$(cd "$T/qa" && pwd -P)" | sed 's/[^A-Za-z0-9]/-/g')"; mkdir -p "$TD/sess1/subagents"
-printf '%s\n' '{"message":{"id":"msg_a","model":"claude-sonnet-5-5","usage":{"input_tokens":100,"cache_creation_input_tokens":900,"cache_read_input_tokens":9000,"output_tokens":1000}}}' > "$TD/sess1.jsonl"
+printf '%s\n' '{"timestamp":"2000-01-01T00:00:00.000Z","message":{"id":"msg_a","model":"claude-sonnet-5-5","usage":{"input_tokens":100,"cache_creation_input_tokens":900,"cache_read_input_tokens":9000,"output_tokens":1000}}}' > "$TD/sess1.jsonl"
 hk qa add t-live "files: x" >/dev/null; (cd "$T/qa" && CLAUDE_CONFIG_DIR="$CC" bash .hackathon/bin/hk claim t-live >/dev/null)
-printf '%s\n' '{"message":{"id":"msg_b","model":"claude-sonnet-5-5","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":20000,"output_tokens":2000}}}' >> "$TD/sess1.jsonl"
-printf '%s\n' '{"message":{"id":"msg_c","model":"claude-haiku-5-5","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":5000,"output_tokens":500}}}' > "$TD/sess1/subagents/agent-1.jsonl"
+for i in $(seq 1 60); do [ -f "$T/qa/.hackathon/.cost/claim-t-live.snap" ] && break; sleep 0.25; done   # the snapshot is taken in the background
+printf '%s\n' '{"timestamp":"2999-01-01T00:00:00.000Z","message":{"id":"msg_b","model":"claude-sonnet-5-5","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":20000,"output_tokens":2000}}}' >> "$TD/sess1.jsonl"
+printf '%s\n' '{"timestamp":"2999-01-01T00:00:00.000Z","message":{"id":"msg_c","model":"claude-haiku-5-5","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":5000,"output_tokens":500}}}' > "$TD/sess1/subagents/agent-1.jsonl"
 (cd "$T/qa" && CLAUDE_CONFIG_DIR="$CC" bash .hackathon/bin/hk done t-live x:1 >/dev/null)
 has "live usage within one turn (no Stop needed), subagents included" "$(git -C "$T/r6.git" show hackathon-state:LOG.md | grep 'DONE t-live')" "(usage: out 2k, in 25k)"
+# the node scanner and the awk fallback agree, on awkward logs: streamed updates, a message copied into another file, no id, no stamp, non-ASCII text, later-stamped records
+printf '%s\n' '{"timestamp":"2000-01-01T00:00:00.000Z","message":{"id":"msg_x","usage":{"input_tokens":10,"output_tokens":100}}}' '{"type":"user","message":{"content":"h\u00e9llo \u2713 \"usage\" quoted"}}' '{"timestamp":"2000-01-01T00:00:01.000Z","message":{"id":"msg_x","usage":{"input_tokens":10,"output_tokens":300}}}' > "$TD/dupA.jsonl"
+printf '%s\n' '{"timestamp":"2000-01-01T00:00:01.000Z","message":{"id":"msg_x","usage":{"input_tokens":10,"output_tokens":300}}}' '{"message":{"id":"msg_y","content":"h\u00e9llo \u2713","usage":{"input_tokens":5,"output_tokens":50}}}' '{"message":{"usage":{"input_tokens":1,"output_tokens":7}}}' '{"timestamp":"2999-01-01T00:00:00.000Z","message":{"id":"msg_z","usage":{"input_tokens":9,"output_tokens":9}}}' > "$TD/sess1/subagents/dupB.jsonl"
+printf '{"timestamp":"2000-01-01T00:00:00.000Z","message":{"id":"msg_w","usage":{"input_tokens":2,"output_tokens":3}}}' > "$TD/sess1/subagents/nonewline.jsonl"   # last line without a newline
+for mode in node awk; do t=t-eq-$mode; hk qa add $t "files: x" >/dev/null
+  (cd "$T/qa" && if [ $mode = awk ]; then export HK_USAGE_AWK=1; fi; CLAUDE_CONFIG_DIR="$CC" bash .hackathon/bin/hk claim $t >/dev/null)
+  for i in $(seq 1 60); do [ -f "$T/qa/.hackathon/.cost/claim-$t.snap" ] && break; sleep 0.25; done; done
+eq "usage scan: node gives the right totals" "$(cat "$T/qa/.hackathon/.cost/claim-t-eq-node.snap" 2>/dev/null)" "1360 10018"
+eq "usage scan: the awk fallback agrees with node" "$(cat "$T/qa/.hackathon/.cost/claim-t-eq-awk.snap" 2>/dev/null)" "$(cat "$T/qa/.hackathon/.cost/claim-t-eq-node.snap" 2>/dev/null)"
+rm -f "$TD/dupA.jsonl" "$TD/sess1/subagents/dupB.jsonl" "$TD/sess1/subagents/nonewline.jsonl"
+hk qa add t-pit "files: x" >/dev/null; (cd "$T/qa" && CLAUDE_CONFIG_DIR="$CC" bash .hackathon/bin/hk claim t-pit >/dev/null)
+for i in $(seq 1 60); do [ -f "$T/qa/.hackathon/.cost/claim-t-pit.snap" ] && break; sleep 0.25; done
+eq "claim snapshot is point-in-time (records stamped later are left out)" "$(cat "$T/qa/.hackathon/.cost/claim-t-pit.snap" 2>/dev/null)" "1000 10000"
+(cd "$T/qa" && CLAUDE_CONFIG_DIR="$CC" bash .hackathon/bin/hk done t-pit x:1 >/dev/null)
+has "done after a claim: usage counts what came after the claim" "$(git -C "$T/r6.git" show hackathon-state:LOG.md | grep 'DONE t-pit')" "(usage: out 2k, in 25k)"
 # commands and agents
 has "builder agent exists" "$(cat "$HARN/agents/builder.md")" "name: builder"
 has "handoff follows the context notice" "$(cat "$HARN/commands/handoff.md")" "FRESH CONTEXT"

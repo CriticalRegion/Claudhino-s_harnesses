@@ -1,7 +1,7 @@
 {
   "name": "hackathon",
   "displayName": "Hackathon team harness",
-  "version": "4.3.0",
+  "version": "4.3.1",
   "license": "MIT",
   "description": "Hackathon team harness: per-event setup interview, Opus ideation and lean planning, a designer that locks the UI before anyone builds it (Anthropic frontend-design skill bundled), demo-first rules (toggleable), deadline clock, git-based team board with mid-task events and idle wake-ups, autonomous and solo modes, a night shift where agents build and critique each other toward a goal, Discord feed, usage log. Pause or disable per project.",
   "author": {

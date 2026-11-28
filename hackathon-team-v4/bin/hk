@@ -201,7 +201,7 @@ ensure_layout(){ # create/upgrade state files (v2 boards gain a deps column; SEE
 
 # ---- configuration: every toggle lives on the board (MODE.md) so the whole team shares it ----
 # key:default:ENV_OVERRIDE. Values are validated by `config set`.
-CFG_DEFS="profile:sprint: lean:on: ideation:on: demo_first:on: collision:refuse:HK_COLLISION loop_guard:on: reviewer:off: midtask:on: wake:on:
+CFG_DEFS="profile:sprint: lean:on: lean_settings:off: ideation:on: demo_first:on: collision:refuse:HK_COLLISION loop_guard:on: reviewer:off: midtask:on: wake:on:
 wake_cap:3:HK_WAKE_CAP contract_alerts:on: prepush:on: config_protect:on: autoapprove:off: auto_budget:3h:
 auto_stuck:3:HK_AUTO_STUCK polish_at:240:HK_POLISH_AT freeze_at:60:HK_FREEZE_AT stale_min:45:HK_STALE_MIN
 fetch_every:20:HK_FETCH_EVERY watch_every:15:HK_WATCH_INTERVAL guard:off:HK_GUARD stop_check:off:HK_STOP_CHECK
@@ -217,7 +217,7 @@ cfg_ok(){ # key value -> valid?
   case $1 in
     profile) case $2 in sprint|crunch|careful) return 0;; esac;;
     collision) case $2 in refuse|warn|off) return 0;; esac;;
-    lean|ideation|demo_first|loop_guard|reviewer|midtask|wake|contract_alerts|prepush|config_protect|autoapprove|guard|stop_check|monitor|notify) case $2 in on|off) return 0;; esac;;
+    lean|lean_settings|ideation|demo_first|loop_guard|reviewer|midtask|wake|contract_alerts|prepush|config_protect|autoapprove|guard|stop_check|monitor|notify) case $2 in on|off) return 0;; esac;;
     budget_usd) case $2 in ''|*[!0-9.]*) ;; *) return 0;; esac;;
     auto_budget) dur "$2" >/dev/null && return 0;;
     wake_cap|auto_stuck|polish_at|freeze_at|stale_min|fetch_every|watch_every|night_wake_cap) case $2 in ''|*[!0-9]*) ;; *) return 0;; esac;;
@@ -230,22 +230,29 @@ profile_kv(){ case $1 in
   esac; }
 
 # ---- lean: build-stage token savings (rules/lean.md + a few Claude Code settings in .claude/settings.local.json) ----
-apply_lean(){ # make this clone's .claude/settings.local.json match the effective lean setting (next session onwards)
-  local want; want=$(cfg lean); [ "$(cat "$H/.lean-applied" 2>/dev/null)" = "$want" ] && return 0
+apply_lean(){ # make this clone's .claude/settings.local.json match lean + lean_settings (next session onwards). Opt-in: only lean_settings=on writes anything.
+  local want=off; [ "$(cfg lean)" = on ] && [ "$(cfg lean_settings)" = on ] && want=on
+  [ "$(cat "$H/.lean-applied" 2>/dev/null)" = "$want" ] && return 0
   command -v node >/dev/null 2>&1 || return 0
-  mkdir -p "$ROOT/.claude" && node "$PLUGIN/templates/merge-json.js" "$ROOT/.claude/settings.local.json" - "lean=$want" >/dev/null 2>&1 \
+  mkdir -p "$H/.hh" || return 0; if [ "$want" = on ]; then mkdir -p "$ROOT/.claude" || return 0; fi   # .hh is gitignored: the manifest of keys we added lives there
+  node "$PLUGIN/templates/merge-json.js" "$ROOT/.claude/settings.local.json" - "lean=$want" "manifest=$H/.hh/lean-added.json" >/dev/null 2>&1 \
     && echo "$want" > "$H/.lean-applied"; return 0; }
 USAGE_AWK='function num(k,   r) { if (match($0, "\"" k "\":[0-9]+")) { r = substr($0, RSTART, RLENGTH); sub(/.*:/, "", r); return r + 0 } return 0 }
-    { m = "?"; if (match($0, /"model":"[^"]*"/)) { m = substr($0, RSTART + 9, RLENGTH - 10) }
+    { if (T != "" && match($0, /"timestamp":"[^"]*"/) && substr($0, RSTART + 13, 19) > T) next   # T: only what happened up to then (UTC, to the second)
+      m = "?"; if (match($0, /"model":"[^"]*"/)) { m = substr($0, RSTART + 9, RLENGTH - 10) }
       id = NR; if (match($0, /"id":"msg_[^"]*"/)) id = substr($0, RSTART, RLENGTH)
       M[id] = m; I[id] = num("input_tokens"); W[id] = num("cache_creation_input_tokens"); C[id] = num("cache_read_input_tokens"); O[id] = num("output_tokens") }'
 tx_dir(){ # Claude Code's transcript folder for this project (sessions and their subagents), if we can find it
   local base=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects p d
   for p in "$ROOT" "$ROOTL"; do d=$base/$(printf '%s' "$p" | sed 's/[^A-Za-z0-9]/-/g'); [ -d "$d" ] && { printf '%s' "$d"; return 0; }; done; return 1; }
-cost_sum(){ # this clone's usage so far, all sessions and subagents: "<output> <input incl. cache>" (live from the transcripts)
-  local d; if d=$(tx_dir); then
-    find "$d" -name '*.jsonl' -exec cat {} + 2>/dev/null | grep '"usage"' | awk "$USAGE_AWK"' END { for (id in M) { o += O[id]; i += I[id] + W[id] + C[id] } printf "%d %d\n", o, i }'
+cost_sum(){ # this clone's usage so far (or up to $1, UTC YYYY-MM-DDTHH:MM:SS), all sessions and subagents: "<output> <input incl. cache>" (live from the transcripts)
+  local d r; if d=$(tx_dir); then
+    # node reads the transcripts about 10x faster than awk (0.5s against 7s for 300 MB); awk is the fallback when node is missing or fails
+    if [ -z "${HK_USAGE_AWK:-}" ] && command -v node >/dev/null 2>&1 && r=$(node "$PLUGIN/templates/usage-sum.js" "$d" "${1:-}" 2>/dev/null) && [ -n "$r" ]; then printf '%s\n' "$r"; return 0; fi
+    find "$d" -name '*.jsonl' -exec sh -c 'for f; do cat "$f"; echo; done' _ {} + 2>/dev/null | grep '"usage"' | awk -v T="${1:-}" "$USAGE_AWK"' END { for (id in M) { o += O[id]; i += I[id] + W[id] + C[id] } printf "%d %d\n", o, i }'
   else cat "$H"/.cost/*.tsv 2>/dev/null | awk -F'\t' '{ o += $5; i += $2 + $3 + $4 } END { printf "%d %d\n", o, i }'; fi; }
+claim_snap(){ # usage as of this moment, computed in the background (reading every transcript takes seconds on a long history): records stamped after now are left out, so it is still a point-in-time snapshot; written whole or not at all
+  local at; at=$(date -u +%Y-%m-%dT%H:%M:%S); mkdir -p "$H/.cost"; ( cost_sum "$at" > "$H/.cost/claim-$1.snap.$$" 2>/dev/null && mv "$H/.cost/claim-$1.snap.$$" "$H/.cost/claim-$1.snap" || rm -f "$H/.cost/claim-$1.snap.$$" ) >/dev/null 2>&1 </dev/null & }
 kfmt(){ awk -v n="$1" 'BEGIN { if (n >= 1e6) printf "%.1fM", n / 1e6; else if (n >= 1e3) printf "%.0fk", n / 1e3; else printf "%d", n }'; }
 
 # ---- the deadline clock (.hackathon/deadline, local time YYYY-MM-DDTHH:MM) ----
@@ -891,8 +898,8 @@ claim)
     fi
     setcol "$id" owner "@$ME"; setcol "$id" status doing; logline "$ev"; touch_seen
     g add -A && g commit -qm "claim $id ($ME)" >/dev/null || die "hk: commit failed"
-    [ -n "$R" ] || { mkdir -p "$H/.cost"; cost_sum > "$H/.cost/claim-$id.snap"; echo "CLAIMED $id (no remote: local only)"; exit 0; }
-    push1 && { announce "$before"; mkdir -p "$H/.cost"; cost_sum > "$H/.cost/claim-$id.snap"; echo "${ev%% (*}"; exit 0; }
+    [ -n "$R" ] || { claim_snap "$id"; echo "CLAIMED $id (no remote: local only)"; exit 0; }
+    push1 && { announce "$before"; claim_snap "$id"; echo "${ev%% (*}"; exit 0; }
     g reset -q --hard HEAD~1   # drop our claim, re-read the latest board, try again
   done
   die "claim NOT made: push kept failing. Run hk sync and retry." ;;
@@ -909,6 +916,7 @@ done)
   [ -n "$(get "$id" id)" ] || die "no task '$id'"
   owner=$(get "$id" owner)
   [ "$owner" = "@$ME" ] || [ "$owner" = "-" ] || die "not yours: $id is owned by $owner"
+  i=0; while [ ! -f "$H/.cost/claim-$id.snap" ] && ls "$H/.cost/claim-$id.snap."* >/dev/null 2>&1 && [ $i -lt 60 ]; do sleep 0.25; i=$((i+1)); done   # the claim's snapshot may still be being written in the background
   u=""; if [ -f "$H/.cost/claim-$id.snap" ]; then
     read -r o0 i0 < "$H/.cost/claim-$id.snap"; read -r o1 i1 <<EOF
 $(cost_sum)
@@ -1218,7 +1226,10 @@ config)
         cfg_def "$k" >/dev/null || die "hk: unknown setting '$k' (see hk config show)"
         cfg_ok "$k" "$v" || die "hk: bad value for $k: '$v'"; done
       mode_publish "$kvs" "CONFIG $what (by @$ME)"; rc=$?
-      case " $kvs " in *" lean="*|*" profile="*) apply_lean; echo "lean: $(cfg lean) (Claude Code settings follow from your next session)";; esac
+      case " $kvs " in *" lean="*|*" lean_settings="*|*" profile="*) apply_lean
+        echo "lean: $(cfg lean), lean_settings: $(cfg lean_settings) (Claude Code settings follow from your next session)"
+        [ "$(cfg lean_settings)" = on ] && [ "$(cfg lean)" = on ] && echo "  .claude/settings.local.json (gitignored, yours only) gets, where you haven't set them: bashOutputMaxChars=10000, effortLevel=high, env MAX_MCP_OUTPUT_TOKENS=8000, env CLAUDE_CODE_SUBAGENT_MODEL=haiku (unnamed subagents only). Undo: hk config set lean_settings=off";;
+      esac
       exit $rc ;;
     *) die "usage: hk config show | get <key> | set k=v ... | profile sprint|crunch|careful" ;;
   esac ;;

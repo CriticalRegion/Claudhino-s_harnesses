@@ -14,7 +14,7 @@ This is the per-hackathon setup interview: the human answers, you apply; never s
    b. One multi-select, "Change anything from that profile?": Rules and modes / Notifications / Tools / Timing. For each group picked, ask its toggles with the profile's value as the default (`hk config show` lists them):
       - Rules and modes: ideation (kickoff generates ideas / you bring your own), demo_first, auto_budget, collision (refuse/warn/off), loop_guard, reviewer, guard, stop_check, config_protect
       - Notifications: midtask, wake and wake_cap, contract_alerts, notify (desktop), and Discord (step 7)
-      - Tools: ponytail, GitHub and Vercel MCP (or the gh / vercel CLIs), default model, prepush, autoapprove (approve prompts even outside autonomous mode)
+      - Tools: ponytail, GitHub and Vercel MCP (or the gh / vercel CLIs), default model, prepush, autoapprove (approve prompts even outside autonomous mode), lean and lean_settings (lean_settings writes output caps, effort and the unnamed-subagent model to their gitignored `.claude/settings.local.json`; off unless they opt in)
       - Timing: polish_at (minutes before the deadline, 240), freeze_at (60), stale_min (45), budget_usd (0 = none)
    c. Apply in ONE command so the human approves once: `hk config profile <p>` plus, if they changed toggles, `&& hk config set k=v k=v ...`. If Tools changed ponytail, MCP or the model, re-run `hk install-project --model <m> --mcp <github,vercel|none> --ponytail <on|off>`.
 6. Models, in one line: kickoff, judge and deep run on Opus; building runs on Sonnet. Anyone who wants Opus as their own main model: `/model opus` (or `"model": "opus"` in their `.claude/settings.local.json`).

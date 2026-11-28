@@ -23,6 +23,7 @@ Teammates: install the plugin, open the project, run `/hackathon:setup` (only as
 | `hk config profile sprint\|crunch\|careful`, `hk config set k=v` | Team settings (all listed by `hk config show`) |
 | `hk demo-first off` | Build it properly instead of demo-first |
 | `hk config set lean=off` | Turn off the build-stage usage savings (size-aware /clear advice, task cards, smoke checks, flail guard, code map) |
+| `hk config set lean_settings=on` | Opt in to lean also writing output caps, effort and the unnamed-subagent model to your gitignored `.claude/settings.local.json` (off by default) |
 | `hk config set ideation=off` | Bring your own idea: kickoff skips idea generation and just plans it |
 | `.hackathon/bin/hk auto on 2h` / `solo @name` | Autonomous / solo mode: humans only, in your own terminal; `hk auto off` is the kill switch |
 | `/hackathon:night <goal>` then `.hackathon/bin/hk night start --until 07:00 --budget 30` | Night shift: the agents build on branches, review each other (numbered MUST/SHOULD findings, capped rounds), merge what's approved and run goal checks until the Done-when list passes or time/budget runs out; `hk night report` in the morning, `hk night stop` any time |

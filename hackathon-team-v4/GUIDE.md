@@ -65,7 +65,8 @@ All team settings live on the board (`MODE.md`), so every teammate's agent follo
 
 | Setting | sprint (default) | crunch | careful | What it does |
 |---|---|---|---|---|
-| lean | on | on | off | Build-stage usage savings (section 7b): lean rules, task cards, smoke checks instead of Playwright per slice, size-aware /clear advice, the flail guard, the code map, and a few Claude Code settings in your `.claude/settings.local.json` |
+| lean | on | on | off | Build-stage usage savings (section 7b): lean rules, task cards, smoke checks instead of Playwright per slice, size-aware /clear advice, the flail guard and the code map |
+| lean_settings | off | off | off | Opt-in: also write a few Claude Code settings (output caps, effort, unnamed-subagent model) to your gitignored `.claude/settings.local.json` (section 7b); needs lean on |
 | ideation | on | on | on | `/hackathon:kickoff` generates and scores ideas; `off` = you bring your own idea and kickoff only plans it |
 | demo_first | on | on | off | Demo-first rules vs build-it-properly |
 | collision | refuse | warn | refuse | Editing a teammate's claimed/owned file: refuse once / warn / off |
@@ -104,8 +105,8 @@ The harness's own overhead is small (about 4-5k tokens a session); usage goes on
 - **Plan once, don't explore**: kickoff names the scaffold command (an official starter) and what gets mocked; board tasks carry a card (`files: ...; done: ...`); `.hackathon/MAP.md` (one line per file with the names it defines, regenerated after every commit at no model cost; `hk map`) replaces exploring.
 - **Cheap checks**: `t0-scaffold` adds a `smoke` script (curl the demo-path routes); slices verify with `check` + `smoke`; Playwright walks the app only in `/hackathon:demo-check`.
 - **No flailing**: the flail guard (a `PostToolUseFailure` hook) sees the same Bash command fail twice and tells the agent to escalate (`build-fixer` / `deep`) instead of a third blind try. Noisy commands go through `set -o pipefail; ... | tail -40`.
-- **Claude Code settings** written to each person's gitignored `.claude/settings.local.json` (only keys you haven't set; removed again when lean is off; effective from the next session): `bashOutputMaxChars: 10000` (longer output is saved to a file with a preview), `MAX_MCP_OUTPUT_TOKENS=8000`, `CLAUDE_CODE_SUBAGENT_MODEL=haiku` (unnamed subagents; named agents keep their model), `effortLevel: high`.
-- **Visible**: `hk claim`/`hk done` record each task's usage on its DONE line (`(usage: out 14k, in 620k)`, read live from Claude Code's session logs, subagents included); `hk cost --tasks` lists them.
+- **Claude Code settings, opt-in** (`hk config set lean_settings=on`; off by default, so lean never edits your settings unasked): written to each person's gitignored `.claude/settings.local.json`, only keys you haven't set, effective from the next session: `bashOutputMaxChars: 10000` (longer output is saved to a file with a preview), `MAX_MCP_OUTPUT_TOKENS=8000`, `CLAUDE_CODE_SUBAGENT_MODEL=haiku` (unnamed subagents; named agents keep their model: the agent's own `model` field outranks that variable), `effortLevel: high`. The keys it added are recorded in `.hackathon/.hh/lean-added.json`, so `lean_settings=off` (or `lean=off`) removes exactly those and never a value you set yourself, even an identical one. Projects that got these settings silently from 4.2.0-4.2.1 are cleaned up at the next session start.
+- **Visible**: `hk claim` snapshots usage in the background and `hk done` records each task's usage on its DONE line (`(usage: out 14k, in 620k)`, read live from Claude Code's session logs, subagents included; about 0.5s for 300 MB of logs with node, 10x slower with the awk fallback); `hk cost --tasks` lists them.
 
 **Measured** (`tests/ab/run.sh`: the same 4-task Next.js app built headless on Sonnet, then checked independently: `npm run build` plus the 3 demo steps over HTTP):
 
